@@ -76,6 +76,7 @@ def load(path=None, overrides=None):
     return cfg
 
 
+RESERVED = ("id", "title", "year", "doi", "status", "screened_by", "date", "problems")  # export.COLUMNS
 ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 
 
@@ -99,6 +100,8 @@ def validate(cfg):
             raise ConfigError(f"{where}: id must start with a letter and use only letters, digits, - and _")
         if qid in seen:
             raise ConfigError(f"{where}: id used twice")
+        if qid in RESERVED or qid.endswith("_reason"):
+            raise ConfigError(f"{where}: this id is taken by a column of the CSV export; choose another")
         seen.add(qid)
         if not str(q.get("ask") or "").strip():
             raise ConfigError(f"{where}: needs `ask`, the question for the model")

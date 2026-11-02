@@ -5,6 +5,9 @@ from collections import Counter
 
 from . import prompt
 
+# Fixed CSV columns: a question can't have one of these ids (nor end in _reason, see config.validate)
+COLUMNS = ("id", "title", "year", "doi", "status", "screened_by", "date", "problems")
+
 
 def value(answer, q):
     if not answer:
@@ -20,7 +23,7 @@ def rows(cfg, results):
     header = ["id", "title", "year", "doi", "status"]
     for q in qs:
         header += [q["id"], f"{q['id']}_reason"]
-    header += ["model", "date", "problems"]
+    header += ["screened_by", "date", "problems"]
     out = [header]
     for r in results:
         it, ans = r.get("item") or {}, r.get("answers") or {}

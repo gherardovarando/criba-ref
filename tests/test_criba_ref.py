@@ -105,6 +105,8 @@ def test_hashed_id_stable():
 def test_config_errors(tmp_path):
     with pytest.raises(config.ConfigError, match="fallback"):
         project(tmp_path, extra='\n[[question]]\nid = "x"\nask = "?"\nlabels = ["a"]\nfallback = "b"\n')
+    with pytest.raises(config.ConfigError, match="column"):
+        project(tmp_path, extra='\n[[question]]\nid = "status"\nask = "?"\ntype = "text"\n')
     with pytest.raises(config.ConfigError, match="twice"):
         project(tmp_path, extra='\n[[question]]\nid = "data"\nask = "?"\ntype = "text"\n')
 
@@ -167,6 +169,7 @@ def test_run_resume_export(tmp_path, capsys):
     assert st.done == 1
     rows = export.rows(cfg, screen.results(cfg, items))
     assert rows[0][:7] == ["id", "title", "year", "doi", "status", "decision", "decision_reason"]
+    assert rows[0][-3:] == ["screened_by", "date", "problems"] and len(set(rows[0])) == len(rows[0])
     assert rows[1][5] == "include" and rows[1][7] == "a"
     assert "decision: include 1, maybe 1" in export.stats(cfg, screen.results(cfg, items))
 

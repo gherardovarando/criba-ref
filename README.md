@@ -141,7 +141,7 @@ answer = { decision = "maybe" }
 - `fingerprint`: a hash of the instructions, the questions and the model settings. Two results with the same fingerprint were made in the same way.
 - The abstract is not copied into the result: it stays in the input file.
 
-`criba-ref export` writes the CSV with the columns `id, title, year, doi, status`, then `<question>` and `<question>_reason` for each question (tags joined with `; `), then `model, date, problems`.
+`criba-ref export` writes the CSV with the columns `id, title, year, doi, status`, then `<question>` and `<question>_reason` for each question (tags joined with `; `), then `screened_by` (the model that answered), `date` and `problems`. So a question can't be called `id`, `title`, `year`, `doi`, `status`, `screened_by`, `date` or `problems`, nor end in `_reason`.
 
 ## Privacy
 
