@@ -4,9 +4,12 @@ import csv
 import json
 import random
 from datetime import datetime
+from importlib import resources
 from pathlib import Path
 
 from . import __version__
+
+COLUMNS = ["id", "title", "year", "doi", "url", "abstract"]
 
 
 def header(q):
@@ -32,12 +35,13 @@ def choose(items, sample=None, seed=1, ids=None):
 def write(path, items, questions, info):
     """Write the sheet and a sidecar PATH.json with how it was made. Never overwrites."""
     path = Path(path)
-    if path.exists():
-        raise FileExistsError(f"{path} exists already: not overwritten (it may hold an expert's work)")
+    for p in [path] + ([Path(info["html"])] if info.get("html") else []):
+        if p.exists():
+            raise FileExistsError(f"{p} exists already: not overwritten (it may hold an expert's work)")
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
-        w.writerow(["id", "title", "year", "doi", "url", "abstract"] + [header(q) for q in questions] + ["comment"])
+        w.writerow(COLUMNS + [header(q) for q in questions] + ["comment"])
         for it in items:
             w.writerow([it.id, it.title, it.year, it.doi, it.url, it.abstract] + [""] * len(questions) + [""])
     side = path.with_name(path.name + ".json")
@@ -45,3 +49,33 @@ def write(path, items, questions, info):
                                 "questions": [q["id"] for q in questions], "ids": [it.id for it in items]},
                                indent=2) + "\n")
     return side
+
+
+def page_data(name, items, questions, context, info):
+    """What the labelling page needs: the questions (with the column names of the CSV sheet) and the items.
+    No model answers."""
+    qs = [{"id": q["id"], "type": q["type"], "multiple": bool(q.get("multiple")), "labels": q.get("labels", []),
+           "ask": " ".join(q["ask"].split()), "notes": " ".join(str(q.get("notes") or "").split()),
+           "examples": list(q.get("examples") or []), "column": header(q)} for q in questions]
+    rows = [{"id": it.id, "title": it.title, "year": it.year, "doi": it.doi, "url": it.url, "abstract": it.abstract}
+            for it in items]
+    return {"meta": {"name": name, "title": f"Labelling: {name}", "selection": info.get("selection", ""),
+                     "created": datetime.now().isoformat(timespec="seconds"), "version": __version__},
+            "context": (context or "").strip(), "questions": qs, "items": rows}
+
+
+def embed_json(obj):
+    """JSON that is safe inside <script>: no "<", ">" or "&" can end the element or open a comment."""
+    return (json.dumps(obj, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e")
+            .replace("&", "\\u0026").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029"))
+
+
+def write_html(path, name, items, questions, context, info):
+    """The labelling page: one self-contained HTML file. Never overwrites."""
+    path = Path(path)
+    if path.exists():
+        raise FileExistsError(f"{path} exists already: not overwritten")
+    page = resources.files("criba_ref").joinpath("data/sheet.html").read_text(encoding="utf-8")
+    path.write_text(page.replace("__SHEET_DATA__", embed_json(page_data(name, items, questions, context, info)), 1),
+                    encoding="utf-8")
+    return path

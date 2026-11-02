@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Labelling sheet</title>
+<style>
+:root{--bg:#fcfcfb;--card:#ffffff;--ink:#0b0b0b;--ink2:#52514e;--muted:#8a8984;--line:#e4e3df;
+  --accent:#2a78d6;--accent-ink:#ffffff;--done:#2f8f5b;--warn-bg:#fff4e0;--warn-ink:#7a4a00;--focus:#2a78d6}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1a1a19;--card:#242422;--ink:#f0efec;
+  --ink2:#c3c2b7;--muted:#8f8e86;--line:#383835;--accent:#3987e5;--accent-ink:#ffffff;--done:#4fb07c;
+  --warn-bg:#3a2e17;--warn-ink:#f3cf8b;--focus:#6da7ec}}
+:root[data-theme="dark"]{--bg:#1a1a19;--card:#242422;--ink:#f0efec;--ink2:#c3c2b7;--muted:#8f8e86;--line:#383835;
+  --accent:#3987e5;--accent-ink:#ffffff;--done:#4fb07c;--warn-bg:#3a2e17;--warn-ink:#f3cf8b;--focus:#6da7ec}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:0 16px}
+header{position:sticky;top:0;z-index:2;background:var(--bg);border-bottom:1px solid var(--line)}
+header .wrap{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding-top:10px;padding-bottom:10px}
+h1{font-size:1.05rem;margin:0;flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.progress{color:var(--ink2);font-size:.9rem;white-space:nowrap}
+.bar{height:4px;background:var(--line);border-radius:2px;overflow:hidden;flex-basis:100%}
+.bar span{display:block;height:100%;background:var(--done);width:0}
+button,.btn{font:inherit;font-size:.9rem;padding:6px 12px;border-radius:6px;border:1px solid var(--line);
+  background:var(--card);color:var(--ink);cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.tools{display:flex;gap:8px;flex-wrap:wrap}
+label.name{display:flex;gap:6px;align-items:center;font-size:.9rem;color:var(--ink2)}
+input[type=text],textarea{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);
+  border-radius:6px;padding:6px 8px;width:100%}
+label.name input{width:12em}
+.banner{background:var(--warn-bg);color:var(--warn-ink);padding:8px 12px;border-radius:6px;margin:12px 0;font-size:.9rem}
+.hidden{display:none !important}
+details.instr{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 14px;margin:12px 0}
+details.instr summary{cursor:pointer;font-weight:600}
+.instr .ctx{white-space:pre-wrap;color:var(--ink2)}
+.instr h3{font-size:.95rem;margin:14px 0 4px}
+.instr ul{margin:4px 0 8px;padding-left:20px}
+.paper{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin:12px 0}
+.paper .meta{color:var(--muted);font-size:.85rem;overflow-wrap:anywhere}
+.paper h2{font-size:1.15rem;margin:4px 0 10px;overflow-wrap:anywhere}
+.paper h2 a{color:inherit}
+.abstract{white-space:pre-wrap;overflow-wrap:anywhere}
+fieldset{border:1px solid var(--line);border-radius:8px;margin:12px 0;padding:10px 14px;background:var(--card)}
+legend{font-weight:600;padding:0 4px}
+.ask{color:var(--ink2);font-size:.9rem;margin:0 0 8px}
+.opts{display:flex;flex-wrap:wrap;gap:6px 14px}
+.opts label{display:flex;gap:6px;align-items:center;cursor:pointer;padding:2px 0}
+.opts label.none{color:var(--ink2);font-style:italic}
+.key{font-size:.75rem;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+fieldset.todo legend::after{content:" · to answer";color:var(--warn-ink);font-weight:400;font-size:.85rem}
+nav.steps{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
+nav.steps .spacer{flex:1}
+.dots{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 32px}
+.dots button{width:30px;height:30px;padding:0;font-size:.75rem;border-radius:50%}
+.dots button.done{background:var(--done);color:#fff;border-color:var(--done)}
+.dots button.current{outline:2px solid var(--accent);outline-offset:1px}
+.help{color:var(--muted);font-size:.85rem;margin-bottom:24px}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1 id="title">Labelling sheet</h1>
+  <label class="name">Your name <input type="text" id="labeller" autocomplete="name"></label>
+  <span class="progress" id="progress"></span>
+  <div class="tools">
+    <button id="btn-load" type="button" title="Continue from a CSV you downloaded before">Load CSV</button>
+    <button id="btn-download" class="primary" type="button">Download CSV</button>
+  </div>
+  <div class="bar" aria-hidden="true"><span id="bar"></span></div>
+</div></header>
+<main class="wrap">
+  <div class="banner hidden" id="banner-name">Write your name at the top first: it goes into the CSV with your answers.</div>
+  <div class="banner hidden" id="banner-unsaved">You have answers that are not in a downloaded CSV yet. Download the CSV before you close this page.</div>
+  <div class="banner hidden" id="banner-storage">This browser does not keep the answers between visits. Download the CSV before you close this page.</div>
+  <details class="instr" id="instructions"><summary>Instructions and criteria</summary><div id="instr-body"></div></details>
+  <article class="paper" id="paper" aria-live="polite"></article>
+  <form id="form" autocomplete="off"></form>
+  <nav class="steps">
+    <button type="button" id="btn-prev">← Previous</button>
+    <button type="button" id="btn-next">Next →</button>
+    <span class="spacer"></span>
+    <button type="button" id="btn-todo">Next not done</button>
+  </nav>
+  <div class="dots" id="dots" aria-label="Papers"></div>
+  <p class="help">Keys: <span class="key">1</span>–<span class="key">9</span> choose an answer of the first question,
+    <span class="key">←</span> <span class="key">→</span> move, <span class="key">n</span> next not done,
+    <span class="key">?</span> instructions. The page keeps your answers in this browser as you go; the CSV
+    you download is what counts.</p>
+  <input type="file" id="file" accept=".csv,text/csv" class="hidden">
+</main>
+
+<script type="application/json" id="sheet-data">__SHEET_DATA__</script>
+
+<script id="model">
+// ---------- model: pure functions, no DOM (tested with Node) ----------
+var CribaModel = (function () {
+  var BASE = ["id", "title", "year", "doi", "url", "abstract"];
+  var EXTRA = ["comment", "labeller", "seconds", "last_change"];
+
+  function labelQuestions(data) { return data.questions.filter(function (q) { return q.type === "label"; }); }
+
+  // An answer: single label -> string; tags -> array ([] means "none"); text -> string. Missing -> undefined.
+  function answered(q, v) {
+    if (q.type === "text") return true;  // optional
+    if (q.multiple) return Array.isArray(v);
+    return typeof v === "string" && v !== "";
+  }
+
+  function isDone(data, ans) {
+    ans = ans || {};
+    return labelQuestions(data).every(function (q) { return answered(q, ans[q.id]); });
+  }
+
+  function progress(data, state) {
+    var done = data.items.filter(function (it) { return isDone(data, (state.answers || {})[it.id]); }).length;
+    return { done: done, total: data.items.length };
+  }
+
+  function cell(q, v) {
+    if (v === undefined || v === null) return "";
+    if (q.type === "label" && q.multiple) return v.length ? v.join("; ") : "none";
+    return String(v);
+  }
+
+  function parseCell(q, s) {
+    s = (s || "").trim();
+    if (!s) return undefined;
+    if (q.type === "text") return s;
+    var lower = {};
+    q.labels.forEach(function (l) { lower[l.toLowerCase()] = l; });
+    if (!q.multiple) return lower[s.toLowerCase()];
+    var parts = s.split(/[;,]/).map(function (p) { return p.trim().toLowerCase(); }).filter(Boolean);
+    if (parts.every(function (p) { return ["none", "-", "no", "[]"].indexOf(p) >= 0; })) return [];
+    return q.labels.filter(function (l) { return parts.indexOf(l.toLowerCase()) >= 0; });
+  }
+
+  function quote(v) {
+    v = v === undefined || v === null ? "" : String(v);
+    return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+
+  function header(data) {
+    return BASE.concat(data.questions.map(function (q) { return q.column; }), EXTRA);
+  }
+
+  function toCSV(data, state) {
+    var rows = [header(data)];
+    data.items.forEach(function (it) {
+      var a = (state.answers || {})[it.id] || {};
+      rows.push(BASE.map(function (k) { return it[k]; })
+        .concat(data.questions.map(function (q) { return cell(q, a[q.id]); }))
+        .concat([a.comment || "", a.labeller || "", a.seconds ? Math.round(a.seconds) : "",
+                 a.last_change || ""]));
+    });
+    return rows.map(function (r) { return r.map(quote).join(","); }).join("\r\n") + "\r\n";
+  }
+
+  // RFC 4180: quoted fields with "" escapes, commas and newlines inside quotes, CRLF or LF.
+  function fromCSV(text) {
+    text = String(text).replace(/^﻿/, "");
+    var rows = [], row = [], f = "", i = 0, q = false;
+    while (i < text.length) {
+      var c = text[i];
+      if (q) {
+        if (c === '"') { if (text[i + 1] === '"') { f += '"'; i += 2; continue; } q = false; i++; continue; }
+        f += c; i++; continue;
+      }
+      if (c === '"') { q = true; i++; continue; }
+      if (c === ",") { row.push(f); f = ""; i++; continue; }
+      if (c === "\r") { i++; continue; }
+      if (c === "\n") { row.push(f); rows.push(row); row = []; f = ""; i++; continue; }
+      f += c; i++;
+    }
+    if (f !== "" || row.length) { row.push(f); rows.push(row); }
+    return rows;
+  }
+
+  function baseName(h) { return String(h || "").replace(/\s*[\[(].*$/, "").trim().toLowerCase(); }
+
+  // A CSV (downloaded before, or a filled sheet) -> {answers, labeller}. Unknown ids and columns are ignored.
+  function readAnswers(data, text) {
+    var rows = fromCSV(text);
+    if (!rows.length) return { answers: {}, labeller: "", n: 0 };
+    var head = rows[0].map(baseName), col = {};
+    head.forEach(function (h, k) { if (!(h in col)) col[h] = k; });
+    if (!("id" in col)) throw new Error("the CSV has no id column");
+    var ids = {};
+    data.items.forEach(function (it) { ids[it.id] = true; });
+    var out = {}, who = "", n = 0;
+    rows.slice(1).forEach(function (r) {
+      var id = (r[col.id] || "").trim();
+      if (!ids[id]) return;
+      var a = {};
+      data.questions.forEach(function (q) {
+        var k = col[q.id.toLowerCase()];
+        if (k === undefined) return;
+        var v = parseCell(q, r[k]);
+        if (v !== undefined) a[q.id] = v;
+      });
+      if ("comment" in col && r[col.comment]) a.comment = r[col.comment];
+      if ("seconds" in col && r[col.seconds]) a.seconds = Number(r[col.seconds]) || 0;
+      if ("last_change" in col && r[col.last_change]) a.last_change = r[col.last_change];
+      if ("labeller" in col && r[col.labeller]) { a.labeller = r[col.labeller]; who = who || r[col.labeller]; }
+      out[id] = a; n++;
+    });
+    return { answers: out, labeller: who, n: n };
+  }
+
+  // FNV-1a of the ids and question ids: one storage key per sheet.
+  function sheetKey(data) {
+    var s = data.items.map(function (it) { return it.id; }).join("\n") + "|" +
+            data.questions.map(function (q) { return q.id; }).join(",");
+    var h = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return "criba-ref-sheet-" + h.toString(16);
+  }
+
+  function nextTodo(data, state, from) {
+    var n = data.items.length;
+    for (var k = 1; k <= n; k++) {
+      var i = (from + k) % n;
+      if (!isDone(data, (state.answers || {})[data.items[i].id])) return i;
+    }
+    return -1;
+  }
+
+  function fileName(data, labeller) {
+    var who = String(labeller || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    return (data.meta.name || "sheet") + (who ? "-" + who : "") + ".csv";
+  }
+
+  return { isDone: isDone, progress: progress, toCSV: toCSV, fromCSV: fromCSV, readAnswers: readAnswers,
+           sheetKey: sheetKey, nextTodo: nextTodo, fileName: fileName, cell: cell, parseCell: parseCell,
+           header: header };
+})();
+if (typeof module !== "undefined") { module.exports = CribaModel; }
+</script>
+
+<script>
+// ---------- store: where the state lives. v1: this browser (localStorage). ----------
+// Other stores (a local server, a shared database) only need the same load() and save(state).
+function BrowserStore(key) {
+  var ok = true;
+  try { localStorage.setItem(key + "-test", "1"); localStorage.removeItem(key + "-test"); } catch (e) { ok = false; }
+  return {
+    available: ok,
+    load: function () {
+      if (!ok) return null;
+      try { return JSON.parse(localStorage.getItem(key) || "null"); } catch (e) { return null; }
+    },
+    save: function (state) {
+      if (!ok) return;
+      try { localStorage.setItem(key, JSON.stringify(state)); } catch (e) { /* full or blocked: keep going */ }
+    }
+  };
+}
+
+// ---------- view ----------
+(function () {
+  var M = CribaModel;
+  var data = JSON.parse(document.getElementById("sheet-data").textContent);
+  var store = BrowserStore(M.sheetKey(data));
+  var state = store.load() || { labeller: "", current: 0, answers: {}, unsaved: false, seen: false };
+  state.answers = state.answers || {};
+  if (!(state.current >= 0 && state.current < data.items.length)) state.current = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var firstLabel = data.questions.filter(function (q) { return q.type === "label" && !q.multiple; })[0];
+
+  document.title = (data.meta.name || "Labelling sheet") + " · labelling";
+  $("title").textContent = data.meta.title || data.meta.name || "Labelling sheet";
+  if (!store.available) $("banner-storage").classList.remove("hidden");
+
+  function save() { store.save(state); }
+  function el(tag, attrs, text) {
+    var e = document.createElement(tag);
+    for (var k in attrs || {}) { if (attrs[k] !== undefined && attrs[k] !== null) e.setAttribute(k, attrs[k]); }
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  // Instructions: the same criteria the model gets, never its answers.
+  function renderInstructions() {
+    var body = $("instr-body");
+    body.textContent = "";
+    if (data.context) body.appendChild(el("p", { "class": "ctx" }, data.context));
+    data.questions.forEach(function (q) {
+      body.appendChild(el("h3", {}, q.id));
+      body.appendChild(el("p", {}, q.ask));
+      if (q.type === "label") {
+        body.appendChild(el("p", { "class": "ask" }, (q.multiple ? "Tags (zero or more, or none): " : "One of: ") +
+          q.labels.join(", ")));
+      }
+      if (q.notes) body.appendChild(el("p", { "class": "ask" }, q.notes));
+      if (q.examples && q.examples.length) {
+        var ul = el("ul");
+        q.examples.forEach(function (x) { ul.appendChild(el("li", {}, x)); });
+        body.appendChild(ul);
+      }
+    });
+    $("instructions").open = !state.seen;
+  }
+
+  function answersOf(it) { return state.answers[it.id] || (state.answers[it.id] = {}); }
+
+  function changed(it) {
+    var a = answersOf(it);
+    a.last_change = new Date().toISOString().slice(0, 19);
+    a.labeller = state.labeller;
+    state.unsaved = true;
+    save();
+    renderStatus();
+  }
+
+  function renderPaper() {
+    var it = data.items[state.current], box = $("paper");
+    box.textContent = "";
+    box.appendChild(el("div", { "class": "meta" },
+      "Paper " + (state.current + 1) + " of " + data.items.length + " · " + it.id + (it.year ? " · " + it.year : "")));
+    var h = el("h2");
+    if (it.url) { var a = el("a", { href: it.url, target: "_blank", rel: "noopener" }, it.title || it.id); h.appendChild(a); }
+    else h.textContent = it.title || it.id;
+    box.appendChild(h);
+    box.appendChild(el("div", { "class": "abstract" }, it.abstract || "(no abstract)"));
+  }
+
+  function renderForm() {
+    var it = data.items[state.current], a = answersOf(it), form = $("form"), locked = !state.labeller.trim();
+    form.textContent = "";
+    data.questions.forEach(function (q) {
+      var fs = el("fieldset");
+      if (q.type === "label" && !(q.multiple ? Array.isArray(a[q.id]) : a[q.id])) fs.className = "todo";
+      fs.appendChild(el("legend", {}, q.id));
+      fs.appendChild(el("p", { "class": "ask" }, q.ask));
+      var opts = el("div", { "class": "opts" });
+      if (q.type === "text") {
+        var t = el("input", { type: "text", "aria-label": q.id });
+        t.value = a[q.id] || "";
+        t.disabled = locked;
+        t.addEventListener("input", function () { if (t.value.trim()) a[q.id] = t.value; else delete a[q.id]; changed(it); });
+        opts.appendChild(t);
+      } else if (!q.multiple) {
+        q.labels.forEach(function (l, k) {
+          var lab = el("label"), r = el("input", { type: "radio", name: "q-" + q.id, value: l });
+          r.checked = a[q.id] === l;
+          r.disabled = locked;
+          r.addEventListener("change", function () { a[q.id] = l; changed(it); renderForm(); });
+          lab.appendChild(r);
+          lab.appendChild(document.createTextNode(l));
+          if (q === firstLabel && k < 9) lab.appendChild(el("span", { "class": "key" }, String(k + 1)));
+          opts.appendChild(lab);
+        });
+      } else {
+        var cur = Array.isArray(a[q.id]) ? a[q.id] : null;
+        var none = el("label", { "class": "none" }), nb = el("input", { type: "checkbox" });
+        nb.checked = !!cur && cur.length === 0;
+        nb.disabled = locked;
+        nb.addEventListener("change", function () {
+          if (nb.checked) a[q.id] = []; else delete a[q.id];
+          changed(it); renderForm();
+        });
+        q.labels.forEach(function (l) {
+          var lab = el("label"), c = el("input", { type: "checkbox", value: l });
+          c.checked = !!cur && cur.indexOf(l) >= 0;
+          c.disabled = locked;
+          c.addEventListener("change", function () {
+            var now = Array.isArray(a[q.id]) ? a[q.id].slice() : [];
+            if (c.checked && now.indexOf(l) < 0) now.push(l);
+            if (!c.checked) now = now.filter(function (x) { return x !== l; });
+            now = q.labels.filter(function (x) { return now.indexOf(x) >= 0; });
+            if (now.length) a[q.id] = now; else delete a[q.id];
+            changed(it); renderForm();
+          });
+          lab.appendChild(c);
+          lab.appendChild(document.createTextNode(l));
+          opts.appendChild(lab);
+        });
+        none.appendChild(nb);
+        none.appendChild(document.createTextNode("none"));
+        opts.appendChild(none);
+      }
+      fs.appendChild(opts);
+      form.appendChild(fs);
+    });
+    var fc = el("fieldset");
+    fc.appendChild(el("legend", {}, "comment"));
+    var ta = el("textarea", { rows: "2", "aria-label": "comment" });
+    ta.value = a.comment || "";
+    ta.disabled = locked;
+    ta.addEventListener("input", function () { if (ta.value.trim()) a.comment = ta.value; else delete a.comment; changed(it); });
+    fc.appendChild(ta);
+    form.appendChild(fc);
+    $("banner-name").classList.toggle("hidden", !locked);
+  }
+
+  function renderStatus() {
+    var p = M.progress(data, state);
+    $("progress").textContent = p.done + " of " + p.total + " done";
+    $("bar").style.width = (p.total ? 100 * p.done / p.total : 0) + "%";
+    $("banner-unsaved").classList.toggle("hidden", !state.unsaved);
+    $("btn-prev").disabled = state.current === 0;
+    $("btn-next").disabled = state.current === data.items.length - 1;
+    var dots = $("dots");
+    dots.textContent = "";
+    data.items.forEach(function (it, i) {
+      var b = el("button", { type: "button", title: it.title, "aria-label": "Paper " + (i + 1) }, String(i + 1));
+      if (M.isDone(data, state.answers[it.id])) b.classList.add("done");
+      if (i === state.current) { b.classList.add("current"); b.setAttribute("aria-current", "true"); }
+      b.addEventListener("click", function () { go(i); });
+      dots.appendChild(b);
+    });
+  }
+
+  function render() { renderPaper(); renderForm(); renderStatus(); }
+
+  function go(i) {
+    if (i < 0 || i >= data.items.length) return;
+    state.current = i;
+    save();
+    render();
+    window.scrollTo(0, 0);
+  }
+
+  // Time on each paper: one second per second the page is visible with that paper open.
+  var ticks = 0;
+  setInterval(function () {
+    if (document.visibilityState !== "visible" || !state.labeller.trim()) return;
+    var a = answersOf(data.items[state.current]);
+    a.seconds = (a.seconds || 0) + 1;
+    if (++ticks % 10 === 0) save();
+  }, 1000);
+
+  $("labeller").value = state.labeller || "";
+  $("labeller").addEventListener("input", function () {
+    state.labeller = $("labeller").value;
+    save();
+    renderForm();
+  });
+  $("instructions").addEventListener("toggle", function () { if (!$("instructions").open && !state.seen) { state.seen = true; save(); } });
+  $("btn-prev").addEventListener("click", function () { go(state.current - 1); });
+  $("btn-next").addEventListener("click", function () { go(state.current + 1); });
+  $("btn-todo").addEventListener("click", function () {
+    var i = M.nextTodo(data, state, state.current);
+    if (i < 0) alert("Every paper is done. Download the CSV."); else go(i);
+  });
+  $("btn-download").addEventListener("click", function () {
+    save();
+    var blob = new Blob([M.toCSV(data, state)], { type: "text/csv;charset=utf-8" });
+    var a = el("a", { href: URL.createObjectURL(blob), download: M.fileName(data, state.labeller) });
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    state.unsaved = false;
+    save();
+    renderStatus();
+  });
+  $("btn-load").addEventListener("click", function () { $("file").click(); });
+  $("file").addEventListener("change", function () {
+    var f = $("file").files[0];
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      try {
+        var got = M.readAnswers(data, r.result);
+        if (!got.n) { alert("No paper of this sheet in that CSV."); return; }
+        if (!confirm("Load the answers for " + got.n + " papers from " + f.name +
+                     "? They replace the answers in this page for those papers.")) return;
+        Object.keys(got.answers).forEach(function (id) { state.answers[id] = got.answers[id]; });
+        if (got.labeller && !state.labeller.trim()) { state.labeller = got.labeller; $("labeller").value = got.labeller; }
+        save();
+        render();
+      } catch (e) { alert("Could not read " + f.name + ": " + e.message); }
+      $("file").value = "";
+    };
+    r.readAsText(f, "utf-8");
+  });
+  document.addEventListener("keydown", function (e) {
+    var t = e.target;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (t && (t.tagName === "TEXTAREA" || (t.tagName === "INPUT" && t.type === "text"))) return;
+    if (e.key === "ArrowRight") { go(state.current + 1); e.preventDefault(); }
+    else if (e.key === "ArrowLeft") { go(state.current - 1); e.preventDefault(); }
+    else if (e.key === "n") { var i = M.nextTodo(data, state, state.current); if (i >= 0) go(i); }
+    else if (e.key === "?") { $("instructions").open = !$("instructions").open; }
+    else if (/^[1-9]$/.test(e.key) && firstLabel && state.labeller.trim()) {
+      var l = firstLabel.labels[Number(e.key) - 1];
+      if (l) { var it = data.items[state.current]; answersOf(it)[firstLabel.id] = l; changed(it); renderForm(); }
+    }
+  });
+  window.addEventListener("beforeunload", function (e) {
+    save();
+    if (state.unsaved) { e.preventDefault(); e.returnValue = ""; }
+  });
+
+  renderInstructions();
+  render();
+})();
+</script>
+</body>
+</html>

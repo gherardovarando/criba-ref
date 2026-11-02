@@ -50,6 +50,8 @@ def parser():
     g.add_argument("--ids", metavar="FILE", help="the references listed in FILE, one id per line")
     s.add_argument("--seed", type=int, default=1, help="seed of the random sample (default 1)")
     s.add_argument("--questions", help="comma-separated question ids (default: all)")
+    s.add_argument("--html", action="store_true",
+                   help="also write a labelling page (same name, .html) that the expert opens in a browser")
     k = sub.add_parser("compare", help="compare screenings: result folders and CSV labels",
                        description="Compare two or more screenings question by question. A source is a results "
                                    "folder or a CSV with an id column and question columns (e.g. a filled-in "
@@ -215,12 +217,19 @@ def cmd_sheet(args):
     info = {"config": cfg["_path"], "input": cfg["input"]["file"],
             "selection": (f"random sample of {args.sample}, seed {args.seed}" if args.sample else
                           f"ids from {args.ids}" if args.ids else "all")}
+    page = Path(args.file).with_suffix(".html") if args.html else None
+    if page:
+        info["html"] = str(page)
     try:
         side = sheet.write(args.file, chosen, qs, info)
+        if page:
+            sheet.write_html(page, Path(args.file).stem, chosen, qs, cfg["prompt"]["context"], info)
     except FileExistsError as e:
         sys.exit(f"error: {e}")
     print(f"wrote {args.file}: {len(chosen)} references, questions {', '.join(q['id'] for q in qs)} "
           f"(how it was made: {side})", file=sys.stderr)
+    if page:
+        print(f"wrote {page}: open it in a browser; its Download CSV gives a sheet that compare reads", file=sys.stderr)
 
 
 def cmd_compare(args):

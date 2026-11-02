@@ -225,3 +225,99 @@ def test_cli_sheet_and_compare(tmp_path, capsys):
 def test_urls():
     items, _ = readers.read_items(FIX / "refs.ris")
     assert items[0].url == "https://doi.org/10.5555/example.1" and items[1].url == ""
+
+
+# ---------- labelling page ----------
+
+def page_of(tmp_path, abstract_extra=""):
+    cfg = project(tmp_path, "refs.bib")
+    items, _ = readers.read_items(cfg["input"]["file"])
+    if abstract_extra:
+        items[0].abstract += abstract_extra
+    out = sheet.write_html(tmp_path / "expert.html", "expert", items, cfg["question"], cfg["prompt"]["context"],
+                           {"selection": "all"})
+    return cfg, items, out.read_text()
+
+
+def embedded(page):
+    import re
+    m = re.search(r'<script type="application/json" id="sheet-data">(.*?)</script>', page, re.S)
+    return json.loads(m.group(1))
+
+
+def test_page_data(tmp_path):
+    cfg, items, page = page_of(tmp_path, ' </script><script>alert(1)</script> & <!--')
+    assert "__SHEET_DATA__" not in page
+    assert page.count("</script>") == 3  # data, model, view: the abstract can't close a script
+    d = embedded(page)
+    assert [i["id"] for i in d["items"]] == [i.id for i in items]
+    assert d["items"][0]["abstract"].endswith("</script><script>alert(1)</script> & <!--")
+    assert d["context"] == "Research question: made up."
+    assert [q["column"] for q in d["questions"]] == [sheet.header(q) for q in cfg["question"]]
+    assert set(d["items"][0]) == {"id", "title", "year", "doi", "url", "abstract"}  # blinded: no answers
+    with pytest.raises(FileExistsError):
+        sheet.write_html(tmp_path / "expert.html", "expert", items, cfg["question"], "", {})
+
+
+NODE_TEST = r"""
+const fs = require("fs"), vm = require("vm");
+const page = fs.readFileSync(process.argv[2], "utf8");
+const model = page.match(/<script id="model">([\s\S]*?)<\/script>/)[1];
+const data = JSON.parse(page.match(/<script type="application\/json" id="sheet-data">([\s\S]*?)<\/script>/)[1]);
+const box = { module: {} }; vm.createContext(box); vm.runInContext(model, box);
+const M = box.module.exports, out = {};
+const [a, b] = data.items.map(i => i.id);
+const state = { labeller: "Ana Núñez", answers: {} };
+out.empty = M.progress(data, state);
+state.answers[a] = { decision: "include", topics: ["a", "b"], data: 'survey, "big"\nline 2', comment: "ok, ñ",
+                     labeller: "Ana Núñez", seconds: 12.4, last_change: "2026-11-02T10:00:00" };
+state.answers[b] = { decision: "exclude", topics: [] };
+out.doneA = M.isDone(data, state.answers[a]);
+out.notDone = M.isDone(data, { decision: "include" });          // tags not answered
+out.textOptional = M.isDone(data, { decision: "maybe", topics: [] });
+out.progress = M.progress(data, state);
+const csv = M.toCSV(data, state);
+fs.writeFileSync(process.argv[3], csv);
+const back = M.readAnswers(data, csv);
+out.roundtrip = back.answers[a];
+out.roundtripB = back.answers[b];
+out.labeller = back.labeller;
+out.header = M.fromCSV(csv)[0];
+out.file = M.fileName(data, "Ana Núñez");
+out.next = M.nextTodo(data, { answers: { [a]: state.answers[a] } }, 0);
+out.key = M.sheetKey(data) === M.sheetKey(JSON.parse(JSON.stringify(data)));
+console.log(JSON.stringify(out));
+"""
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="node is not installed")
+def test_page_model_with_node(tmp_path):
+    cfg, items, page = page_of(tmp_path)
+    (tmp_path / "t.js").write_text(NODE_TEST)
+    r = subprocess.run(["node", str(tmp_path / "t.js"), str(tmp_path / "expert.html"), str(tmp_path / "down.csv")],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    a, b = items[0].id, items[1].id
+    assert out["empty"] == {"done": 0, "total": 2} and out["progress"] == {"done": 2, "total": 2}
+    assert out["doneA"] and not out["notDone"] and out["textOptional"]
+    assert out["roundtrip"] == {"decision": "include", "topics": ["a", "b"], "data": 'survey, "big"\nline 2',
+                                "comment": "ok, ñ", "labeller": "Ana Núñez", "seconds": 12,
+                                "last_change": "2026-11-02T10:00:00"}
+    assert out["roundtripB"] == {"decision": "exclude", "topics": []}
+    assert out["labeller"] == "Ana Núñez" and out["file"] == "expert-ana-nunez.csv"
+    assert out["header"][:6] == sheet.COLUMNS and out["header"][-4:] == ["comment", "labeller", "seconds", "last_change"]
+    assert out["next"] == 1 and out["key"]
+    # the downloaded CSV is what compare reads
+    s = compare.load_csv("expert", tmp_path / "down.csv", cfg["question"])
+    assert s.answers[a] == {"decision": "include", "topics": ("a", "b"), "data": 'survey, "big"\nline 2'}
+    assert s.answers[b] == {"decision": "exclude", "topics": ()}
+    assert not s.warnings
+
+
+def test_cli_sheet_html(tmp_path):
+    fake_project(tmp_path)
+    cli.main(["sheet", "-c", str(tmp_path), "-f", str(tmp_path / "e.csv"), "--html"])
+    assert (tmp_path / "e.html").exists() and json.loads((tmp_path / "e.csv.json").read_text())["html"].endswith("e.html")
+    with pytest.raises(SystemExit):  # the page exists: nothing is overwritten
+        cli.main(["sheet", "-c", str(tmp_path), "-f", str(tmp_path / "e.csv"), "--html"])
