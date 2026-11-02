@@ -76,7 +76,7 @@ def load(path=None, overrides=None):
     return cfg
 
 
-RESERVED = ("id", "title", "year", "doi", "status", "screened_by", "date", "problems")  # export.COLUMNS
+RESERVED = ("id", "title", "year", "doi", "url", "status", "screened_by", "date", "problems")  # export.COLUMNS
 ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 
 
@@ -120,7 +120,10 @@ def validate(cfg):
             fb = q.get("fallback")
             if fb is not None and fb not in labels:
                 raise ConfigError(f"{where}: fallback {fb!r} is not one of its labels")
-        elif q.get("multiple") or q.get("labels"):
+            if "pass" in q:
+                if q["multiple"] or not isinstance(q["pass"], list) or any(x not in labels for x in q["pass"]):
+                    raise ConfigError(f"{where}: pass must be a list of its labels (single-label questions only)")
+        elif q.get("multiple") or q.get("labels") or "pass" in q:
             raise ConfigError(f"{where}: a text question has no labels")
     qmap = {q["id"]: q for q in qs}
     for qid, val in cfg["missing_abstract"]["answer"].items():
@@ -138,11 +141,28 @@ def questions(cfg):
     return cfg["question"]
 
 
+def pass_labels(q):
+    """The labels that send a reference on (to full-text screening), for the screening view of
+    `compare`: the question's `pass`, else every label but "exclude" when it has one, else None."""
+    if q["type"] != "label" or q["multiple"]:
+        return None
+    if "pass" in q:
+        return list(q["pass"])
+    if "exclude" in q["labels"]:
+        return [x for x in q["labels"] if x != "exclude"]
+    return None
+
+
+# Question keys that never reach the model: changing them doesn't make old results stale
+NOT_IN_PROMPT = ("pass",)
+
+
 def fingerprint(cfg, system_prompt):
     """What makes two answers comparable: the questions, the exact instructions and the model.
     A result with another fingerprint is redone by `run --rerun` only."""
     m = cfg["model"]
-    data = {"prompt": system_prompt, "questions": cfg["question"], "backend": m["backend"], "model": m["name"],
+    qs = [{k: v for k, v in q.items() if k not in NOT_IN_PROMPT} for q in cfg["question"]]
+    data = {"prompt": system_prompt, "questions": qs, "backend": m["backend"], "model": m["name"],
             "abstract_chars": cfg["prompt"]["abstract_chars"], "missing_abstract": cfg["missing_abstract"]}
     if m["backend"] == "ollama":
         data.update(temperature=m["temperature"], num_ctx=m["num_ctx"], think=m["think"])

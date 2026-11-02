@@ -6,7 +6,7 @@ from collections import Counter
 from . import prompt
 
 # Fixed CSV columns: a question can't have one of these ids (nor end in _reason, see config.validate)
-COLUMNS = ("id", "title", "year", "doi", "status", "screened_by", "date", "problems")
+COLUMNS = ("id", "title", "year", "doi", "url", "status", "screened_by", "date", "problems")
 
 
 def value(answer, q):
@@ -20,7 +20,7 @@ def value(answer, q):
 
 def rows(cfg, results):
     qs = cfg["question"]
-    header = ["id", "title", "year", "doi", "status"]
+    header = ["id", "title", "year", "doi", "url", "status"]
     for q in qs:
         header += [q["id"], f"{q['id']}_reason"]
     header += ["screened_by", "date", "problems"]
@@ -28,7 +28,8 @@ def rows(cfg, results):
     for r in results:
         it, ans = r.get("item") or {}, r.get("answers") or {}
         model = r.get("model") or {}
-        row = [r.get("id", ""), it.get("title", ""), it.get("year", ""), it.get("doi", ""), r.get("status", "")]
+        row = [r.get("id", ""), it.get("title", ""), it.get("year", ""), it.get("doi", ""), it.get("url", ""),
+               r.get("status", "")]
         for q in qs:
             a = ans.get(q["id"])
             row += [value(a, q), (a or {}).get("reason", "")]

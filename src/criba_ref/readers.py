@@ -18,6 +18,7 @@ CANDIDATES = {
     "id": ["id", "key", "pmid", "eid", "ut (unique wos id)", "accession number"],
     "authors": ["authors", "author", "au", "author full names"],
     "keywords": ["keywords", "author keywords", "kw", "de"],
+    "url": ["url", "link", "ur"],
 }
 
 
@@ -31,10 +32,11 @@ class Item:
     authors: list = field(default_factory=list)
     keywords: list = field(default_factory=list)
     source: str = ""
+    url: str = ""
 
     def meta(self):
         """What goes into the result file about the item (no abstract: the input file has it)."""
-        return {"title": self.title, "year": self.year, "doi": self.doi,
+        return {"title": self.title, "year": self.year, "doi": self.doi, "url": self.url,
                 "authors": self.authors[:3] + (["et al."] if len(self.authors) > 3 else []),
                 "source": self.source}
 
@@ -88,7 +90,8 @@ def make_item(rec, source):
     own = clean_text(rec.get("id"))
     return Item(id=doi or own or hashed_id(title, year), title=title, abstract=clean_text(rec.get("abstract")),
                 year=year, doi=doi, authors=split_list(rec.get("authors")),
-                keywords=split_list(rec.get("keywords"), r"\s*[;,]\s*"), source=source)
+                keywords=split_list(rec.get("keywords"), r"\s*[;,]\s*"), source=source,
+                url=clean_text(rec.get("url")) or (f"https://doi.org/{doi}" if doi else ""))
 
 
 def map_fields(row, mapping):
@@ -110,7 +113,7 @@ def map_fields(row, mapping):
 
 RIS_LINE = re.compile(r"^([A-Z][A-Z0-9])  -(?: (.*))?$")
 RIS_MAP = {"TI": "title", "T1": "title", "AB": "abstract", "N2": "abstract", "DO": "doi", "PY": "year",
-           "Y1": "year", "DA": "year", "ID": "id", "AN": "id", "AU": "authors", "A1": "authors", "KW": "keywords"}
+           "Y1": "year", "DA": "year", "ID": "id", "AN": "id", "AU": "authors", "A1": "authors", "KW": "keywords", "UR": "url"}
 RIS_LISTS = {"authors", "keywords"}
 
 
@@ -243,7 +246,7 @@ def parse_bib(text):
                      "abstract": latex_to_text(f.get("abstract", "")), "doi": f.get("doi", ""),
                      "year": f.get("year") or f.get("date", ""),
                      "authors": [latex_to_text(a) for a in re.split(r"\s+and\s+", f.get("author", "")) if a.strip()],
-                     "keywords": latex_to_text(f.get("keywords", ""))})
+                     "keywords": latex_to_text(f.get("keywords", "")), "url": f.get("url", "")})
     return recs
 
 

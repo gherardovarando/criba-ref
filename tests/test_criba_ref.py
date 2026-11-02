@@ -168,9 +168,10 @@ def test_run_resume_export(tmp_path, capsys):
     st = screen.run(cfg, items, rerun=True, limit=1)
     assert st.done == 1
     rows = export.rows(cfg, screen.results(cfg, items))
-    assert rows[0][:7] == ["id", "title", "year", "doi", "status", "decision", "decision_reason"]
+    assert rows[0][:8] == ["id", "title", "year", "doi", "url", "status", "decision", "decision_reason"]
     assert rows[0][-3:] == ["screened_by", "date", "problems"] and len(set(rows[0])) == len(rows[0])
-    assert rows[1][5] == "include" and rows[1][7] == "a"
+    assert rows[1][4] == "https://doi.org/10.5555/example.1"
+    assert rows[1][6] == "include" and rows[1][8] == "a"
     assert "decision: include 1, maybe 1" in export.stats(cfg, screen.results(cfg, items))
 
 

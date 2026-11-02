@@ -110,10 +110,10 @@ skip_model = true
 answer = { decision = "maybe" }
 ```
 
-- **`[input]`**: the format comes from the file extension unless `format` is set. For CSV and JSON the usual column names are recognised (`title`, `abstract`, `doi`, `year`, `authors`, `keywords`, and the Web of Science and Scopus names); `fields` maps the others. RIS uses TI/T1, AB/N2, DO, PY, AU, KW, ID. A JSON file is a list of objects, or an object holding one.
+- **`[input]`**: the format comes from the file extension unless `format` is set. For CSV and JSON the usual column names are recognised (`title`, `abstract`, `doi`, `year`, `authors`, `keywords`, `url`, and the Web of Science and Scopus names); `fields` maps the others. RIS uses TI/T1, AB/N2, DO, PY, AU, KW, ID, UR. Without a url, a reference with a DOI gets `https://doi.org/<doi>`. A JSON file is a list of objects, or an object holding one.
 - **Ids.** Each reference is known by its DOI (lowercase, without `https://doi.org/`), else its own id (the `id` column, RIS `ID`, the BibTeX key), else a hash of its title and year. A second reference with the same id is skipped with a warning, which also drops duplicates across databases that share a DOI.
 - **`[prompt]`**: `context` is your research question and criteria, in plain words. The built-in instructions put it before the questions. `file = "prompt.md"` replaces the built-in instructions with yours: `{context}` and `{questions}` are filled in, and `<!-- comments -->` are dropped. `abstract_chars` cuts very long abstracts.
-- **`[[question]]`**: `id` (letters, digits, `-`, `_`), `ask`, and `labels` (with `multiple = true` for tags) or `type = "text"`. `fallback` must be one of the labels. `notes` and `examples` go into the instructions: small models learn much more from examples than from descriptions.
+- **`[[question]]`**: `id` (letters, digits, `-`, `_`), `ask`, and `labels` (with `multiple = true` for tags) or `type = "text"`. `fallback` must be one of the labels. `notes` and `examples` go into the instructions: small models learn much more from examples than from descriptions. `pass` (single-label questions only) lists the labels that send a reference on to full-text screening, for the screening view of `compare`. Without it, every label but `exclude` passes, when there is an `exclude`. The model never sees `pass`, so changing it doesn't make old results stale.
 
 ## Output
 
@@ -122,7 +122,7 @@ answer = { decision = "maybe" }
 ```json
 {
   "id": "10.1214/09-aos685",
-  "item": {"title": "...", "year": "2009", "doi": "10.1214/09-aos685", "authors": ["...", "...", "..."], "source": "refs.ris"},
+  "item": {"title": "...", "year": "2009", "doi": "10.1214/09-aos685", "url": "https://doi.org/10.1214/09-aos685", "authors": ["...", "...", "..."], "source": "refs.ris"},
   "answers": {
     "decision": {"label": "include", "reason": "..."},
     "topics": {"labels": ["causal-discovery", "causal-effects"], "reason": "..."},
@@ -141,7 +141,66 @@ answer = { decision = "maybe" }
 - `fingerprint`: a hash of the instructions, the questions and the model settings. Two results with the same fingerprint were made in the same way.
 - The abstract is not copied into the result: it stays in the input file.
 
-`criba-ref export` writes the CSV with the columns `id, title, year, doi, status`, then `<question>` and `<question>_reason` for each question (tags joined with `; `), then `screened_by` (the model that answered), `date` and `problems`. So a question can't be called `id`, `title`, `year`, `doi`, `status`, `screened_by`, `date` or `problems`, nor end in `_reason`.
+`criba-ref export` writes the CSV with the columns `id, title, year, doi, url, status`, then `<question>` and `<question>_reason` for each question (tags joined with `; `), then `screened_by` (the model that answered), `date` and `problems`. So a question can't be called `id`, `title`, `year`, `doi`, `url`, `status`, `screened_by`, `date` or `problems`, nor end in `_reason`.
+
+## Comparing screenings
+
+`criba-ref compare` puts two or more screenings side by side, question by question: models against each other, and models against an expert.
+
+```sh
+criba-ref sheet -f expert.csv --sample 50 --seed 1     # a blinded sheet for the expert
+# ... the expert fills in the answer columns ...
+criba-ref compare results/haiku results/sonnet qwen=results/qwen3-4b expert=expert.csv --reference expert
+criba-ref compare ... --reference expert -o compare/  # also write HTML, Markdown, CSV and LaTeX
+```
+
+**Sources.** Each source is a results folder or a CSV file, given as `PATH` or `NAME=PATH`. The name defaults to the folder name or the file stem.
+- A **results folder**: results with an `error` are left out and counted. If the folder holds results made with different prompts, questions or models (different fingerprints), compare warns.
+- A **CSV**: it needs an `id` column and a column per question, named by the question id. Anything after the id in the header, like `decision [include|exclude|maybe]`, is ignored, and so are other columns.
+  - Labels are matched without case.
+  - Tags are separated by `;` or `,`. `none` means "no tag".
+  - An empty cell means "not labelled": that reference is left out of that question, not counted as wrong.
+  - An unknown label is left out, with a warning.
+
+  A filled-in sheet or a `criba-ref export` both work.
+
+**The sheet.** `criba-ref sheet` writes one row per reference: `id, title, year, doi, url, abstract`, then one empty column per question (its header lists the allowed answers), then `comment`.
+- It has no model answers, so the expert isn't anchored by them.
+- `--sample N --seed S` takes a random sample, `--ids FILE` given references, `--questions` some questions only.
+- It never overwrites a file, and it writes `<sheet>.json` next to it with how it was made.
+
+A random sample holds few includes when they are rare (e.g. 10% of 50 is 5), so recall measured on it is uncertain: look at the intervals.
+
+**What it reports.**
+- For each **single-label question**, for every pair of sources, on the references both labelled:
+  - the confusion matrix;
+  - the agreement, with a 95% Wilson interval;
+  - Cohen's kappa, with a 95% bootstrap interval over references (`--bootstrap 1000`, `--seed 0`: the same inputs always give the same numbers).
+
+  With three or more sources it also gives Fleiss' kappa on the references all of them labelled. The reference, when given, is always the rows.
+- **Screening view** (with `--reference`): the labels in `pass` count as "goes on to full text", the others as "out". For each source against the reference:
+  - TP, FN, FP, TN;
+  - recall (the reference's passes that the source also passes), precision, specificity, F1;
+  - the share sent to full text;
+  - WSS, work saved over sampling (Cohen et al. 2006): (TN + FN) / N − (1 − recall);
+  - the list of **missed references**, which matters most in screening, since a reference missed here is lost.
+- For each **tag question**:
+  - how many references each source tagged with each tag;
+  - Cohen's kappa per tag (present or absent);
+  - the mean Jaccard overlap per reference;
+  - against the reference, per-tag recall and precision.
+- Text questions have no metric.
+
+**Output.** By default, a short summary in the terminal. With `-o DIR`, also (`--formats` picks some):
+- `report.html`: one self-contained page, with the tables, the confusion matrices as SVG, the missed references and every disagreement with each source's reason. It reads on a phone and prints to PDF.
+- `report.md` and `figures/*.svg`: for git and GitHub.
+- `csv/metrics.csv` (long format: question, source_a, source_b, metric, value, ci_low, ci_high, n), `csv/confusion.csv` and `csv/disagreements.csv` (one row per reference and question where sources differ, with each source's answer and reason, to review by hand).
+- `latex/`: tables for a paper.
+  - The files are `agreement-<q>.tex`, `confusion-<q>-<a>-vs-<b>.tex` (a shaded matrix), `screening-<q>.tex` and `tags-<q>.tex`.
+  - Each is a `table` float with a caption and a label (`tab:agreement-decision`, …), to `\input` in a paper that loads `booktabs` and `xcolor` with the `table` option.
+  - `report.tex` inputs them all, to compile and look.
+
+Every report states the date, the criba-ref version, the command line and the config, so a number in a paper can be traced back to how it was made.
 
 ## Privacy
 
@@ -158,6 +217,7 @@ answer = { decision = "maybe" }
 ## Not done yet
 
 - Several models per reference, with an agreement rule and a third model or a person for the disagreements.
+- Stratified samples for the expert sheet (more likely includes, with weights to keep recall unbiased).
 - Back-ends for OpenAI-compatible servers and the Anthropic API.
 - Fetching missing abstracts.
 - Running several references at once.

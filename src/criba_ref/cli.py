@@ -4,7 +4,7 @@ import sys
 from importlib import resources
 from pathlib import Path
 
-from . import __version__, backends, config, export, prompt, readers, screen
+from . import __version__, backends, compare, config, export, prompt, readers, report, screen, sheet
 
 
 def common():
@@ -41,6 +41,29 @@ def parser():
     e = sub.add_parser("export", parents=[c], help="write the results as CSV, one row per item")
     e.add_argument("-f", "--file", default="-", help="CSV file to write (default: print)")
     sub.add_parser("stats", parents=[c], help="counts per status and per label")
+    s = sub.add_parser("sheet", parents=[c], help="write a blinded labelling sheet (CSV) for an expert",
+                       description="A CSV with the references and one empty column per question, without any "
+                                   "model answer. Fill it in and give it to `compare`.")
+    s.add_argument("-f", "--file", required=True, help="the CSV to write (never overwritten)")
+    g = s.add_mutually_exclusive_group()
+    g.add_argument("--sample", type=int, metavar="N", help="a random sample of N references")
+    g.add_argument("--ids", metavar="FILE", help="the references listed in FILE, one id per line")
+    s.add_argument("--seed", type=int, default=1, help="seed of the random sample (default 1)")
+    s.add_argument("--questions", help="comma-separated question ids (default: all)")
+    k = sub.add_parser("compare", help="compare screenings: result folders and CSV labels",
+                       description="Compare two or more screenings question by question. A source is a results "
+                                   "folder or a CSV with an id column and question columns (e.g. a filled-in "
+                                   "sheet), as PATH or NAME=PATH.")
+    k.add_argument("sources", nargs="+", metavar="SOURCE")
+    k.add_argument("-c", "--config", help=f"the project config, or its folder (default: ./{config.CONFIG_NAME})")
+    k.add_argument("-r", "--reference", metavar="NAME", help="score the others against this source (e.g. the expert)")
+    k.add_argument("--questions", help="comma-separated question ids (default: all label questions)")
+    k.add_argument("--ids", metavar="FILE", help="only the references listed in FILE")
+    k.add_argument("-o", "--out", metavar="DIR", help="also write the report files into DIR")
+    k.add_argument("--formats", default=",".join(report.FORMATS),
+                   help=f"with -o: comma-separated, any of {', '.join(report.FORMATS)} (default: all)")
+    k.add_argument("--bootstrap", type=int, default=1000, help="bootstrap resamples for kappa intervals (0: none)")
+    k.add_argument("--seed", type=int, default=0, help="bootstrap seed (default 0)")
     return p
 
 
@@ -167,8 +190,56 @@ def cmd_stats(args):
     print(export.stats(cfg, res))
 
 
+def read_ids(path):
+    return [l.strip() for l in Path(path).read_text().splitlines() if l.strip() and not l.startswith("#")]
+
+
+def pick_questions(cfg, spec):
+    if not spec:
+        return cfg["question"]
+    want = [x.strip() for x in spec.split(",") if x.strip()]
+    qmap = {q["id"]: q for q in cfg["question"]}
+    unknown = [x for x in want if x not in qmap]
+    if unknown:
+        raise config.ConfigError(f"no question {', '.join(unknown)}")
+    return [qmap[x] for x in want]
+
+
+def cmd_sheet(args):
+    cfg = load(args)
+    items, _ = items_of(cfg, warn=False)
+    chosen, missing = sheet.choose(items, args.sample, args.seed, read_ids(args.ids) if args.ids else None)
+    if missing:
+        print(f"warning: {len(missing)} ids not in the input: {', '.join(missing[:5])}", file=sys.stderr)
+    qs = pick_questions(cfg, args.questions)
+    info = {"config": cfg["_path"], "input": cfg["input"]["file"],
+            "selection": (f"random sample of {args.sample}, seed {args.seed}" if args.sample else
+                          f"ids from {args.ids}" if args.ids else "all")}
+    try:
+        side = sheet.write(args.file, chosen, qs, info)
+    except FileExistsError as e:
+        sys.exit(f"error: {e}")
+    print(f"wrote {args.file}: {len(chosen)} references, questions {', '.join(q['id'] for q in qs)} "
+          f"(how it was made: {side})", file=sys.stderr)
+
+
+def cmd_compare(args):
+    cfg = config.load(args.config)
+    qids = [q["id"] for q in pick_questions(cfg, args.questions)] if args.questions else None
+    rep = compare.build(cfg, args.sources, args.reference, qids, read_ids(args.ids) if args.ids else None,
+                        args.bootstrap, args.seed, command="criba-ref " + " ".join(sys.argv[1:]))
+    print(report.text(rep))
+    if args.out:
+        formats = [f.strip() for f in args.formats.split(",") if f.strip()]
+        bad = set(formats) - set(report.FORMATS)
+        if bad:
+            sys.exit(f"error: unknown format(s) {', '.join(sorted(bad))}")
+        files = report.write(rep, args.out, formats)
+        print(f"wrote {len(files)} files to {args.out}", file=sys.stderr)
+
+
 COMMANDS = {"init": cmd_init, "check": cmd_check, "prompt": cmd_prompt, "run": cmd_run, "export": cmd_export,
-            "stats": cmd_stats}
+            "stats": cmd_stats, "sheet": cmd_sheet, "compare": cmd_compare}
 
 
 def main(argv=None):
