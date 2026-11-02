@@ -1,0 +1,64 @@
+# criba-ref project configuration. Paths are relative to this file.
+
+[input]
+file = "references.ris"      # .csv .tsv .bib .ris .json .jsonl
+format = "auto"              # or csv, tsv, bib, ris, json, jsonl
+# CSV/JSON only: which column holds what, when the names aren't the usual ones
+# (title, abstract, doi, year, id, authors, keywords are recognised by themselves).
+# fields = { title = "Article Title", abstract = "Abstract", doi = "DOI" }
+
+[output]
+dir = "results"              # one JSON file per item
+
+[model]
+backend = "ollama"           # "ollama" (local) or "claude-cli" (the `claude` command, your Claude login)
+name = "qwen3:4b-instruct"   # for claude-cli: "haiku", "sonnet" or "opus"
+timeout = 300                # seconds per item
+# ollama only:
+url = "http://localhost:11434"
+temperature = 0.0
+num_ctx = 8192
+
+[prompt]
+# The research question and the inclusion and exclusion criteria, in plain words.
+# The model sees this before the questions.
+context = """
+Research question: ...
+Include: ...
+Exclude: ...
+"""
+# file = "prompt.md"         # your own instructions instead of the built-in ones (`criba-ref prompt copy`)
+abstract_chars = 6000        # longer abstracts are cut
+
+# One [[question]] per thing the model must decide. Each answer comes with a short reason.
+# - labels = [...]            one label from the list
+# - labels + multiple = true  zero or more labels (tags)
+# - type = "text"             a free short answer
+# fallback: the label used when the model answers something that isn't a label.
+# examples and notes help small models a lot.
+
+[[question]]
+id = "decision"
+ask = "Should the reference go on to full-text screening, given the criteria?"
+labels = ["include", "exclude", "maybe"]
+fallback = "maybe"
+notes = "Use maybe when the abstract doesn't say enough to apply a criterion."
+examples = [
+  "An abstract that meets every inclusion criterion -> include",
+  "An abstract that clearly meets an exclusion criterion -> exclude",
+]
+
+[[question]]
+id = "topics"
+ask = "Which of these topics does the reference deal with?"
+labels = ["topic-a", "topic-b", "other"]
+multiple = true
+
+[[question]]
+id = "data"
+ask = "What data does the study use? At most one sentence; \"not stated\" if the abstract doesn't say."
+type = "text"
+
+[missing_abstract]
+skip_model = true            # no abstract: don't ask the model, write this answer instead
+answer = { decision = "maybe" }

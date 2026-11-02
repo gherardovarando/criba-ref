@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "criba-ref"
+version = "0.1.0"
+description = "Screen lists of references (titles and abstracts) with a language model"
+readme = "README.md"
+license = {text = "BSD-3-Clause"}
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+criba-ref = "criba_ref.cli:main"
+
+[tool.setuptools.package-data]
+criba_ref = ["data/*"]
