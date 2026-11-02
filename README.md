@@ -192,12 +192,12 @@ A random sample holds few includes when they are rare (e.g. 10% of 50 is 5), so 
 - Text questions have no metric.
 
 **Output.** By default, a short summary in the terminal. With `-o DIR`, also (`--formats` picks some):
-- `report.html`: one self-contained page, with the tables, the confusion matrices as SVG, the missed references and every disagreement with each source's reason. It reads on a phone and prints to PDF.
+- `report.html`: one self-contained page, starting with the questions and their labels, then the tables, the confusion matrices as SVG, the missed references and every disagreement with each source's reason. It reads on a phone and prints to PDF.
 - `report.md` and `figures/*.svg`: for git and GitHub.
 - `csv/metrics.csv` (long format: question, source_a, source_b, metric, value, ci_low, ci_high, n), `csv/confusion.csv` and `csv/disagreements.csv` (one row per reference and question where sources differ, with each source's answer and reason, to review by hand).
 - `latex/`: tables for a paper.
-  - The files are `agreement-<q>.tex`, `confusion-<q>-<a>-vs-<b>.tex` (a shaded matrix), `screening-<q>.tex` and `tags-<q>.tex`.
-  - Each is a `table` float with a caption and a label (`tab:agreement-decision`, …), to `\input` in a paper that loads `booktabs` and `xcolor` with the `table` option.
+  - The files are `questions.tex` (the questions and their labels), `agreement-<q>.tex`, `confusion-<q>-<a>-vs-<b>.tex` (a shaded matrix), `screening-<q>.tex` and `tags-<q>.tex`.
+  - Each is a `table` float with a caption and a label (`tab:agreement-decision`, …), to `\input` in a paper that loads `booktabs`, `array` and `xcolor` with the `table` option.
   - `report.tex` inputs them all, to compile and look.
 
 Every report states the date, the criba-ref version, the command line and the config, so a number in a paper can be traced back to how it was made.

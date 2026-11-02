@@ -67,6 +67,22 @@ def tag_table(rep, q, fmt=f2):
     return head, rows
 
 
+def short_ask(q, n=140):
+    """The question, cut to its first sentence."""
+    a = " ".join(q["ask"].split())
+    m = re.match(r"(.+?[?.])(\s|$)", a)
+    a = m.group(1) if m else a
+    return a if len(a) <= n else a[:n - 1].rstrip() + "…"
+
+
+QUESTION_HEAD = ["question", "answer", "asked", "labels", "pass to full text"]
+
+
+def question_rows(rep):
+    return [[q["id"], "one label" if q["type"] == "label" else "tags", short_ask(q), ", ".join(q["labels"]),
+             ", ".join(q["pass"]) if q.get("pass") else "-"] for q in rep["questions"]]
+
+
 def table_text(rows, header):
     w = [max(len(str(r[i])) for r in [header] + rows) for i in range(len(header))]
     line = lambda r: "  ".join(str(c).ljust(w[i]) if i == 0 else str(c).rjust(w[i]) for i, c in enumerate(r))
@@ -94,6 +110,10 @@ def text(rep):
     out = []
     srcs = ", ".join(f"{s['name']} ({s['items']} items)" for s in rep["sources"])
     out.append(f"sources: {srcs}" + (f"; reference: {rep['reference']}" if rep["reference"] else ""))
+    out.append("questions:")
+    for qid, kind, ask, labels, passing in question_rows(rep):
+        out.append(f"  {qid} ({kind}): {ask}")
+        out.append(f"    {labels}" + (f"; pass: {passing}" if passing != "-" else ""))
     for s in rep["sources"]:
         for w in s["warnings"][:5]:
             out.append(f"warning: {s['name']}: {w}")
@@ -241,7 +261,8 @@ def md_table(header, rows):
 
 
 def markdown(rep, figdir="figures"):
-    o = [f"# Comparison of screenings", "", meta_line(rep), "", "## Sources", "",
+    o = [f"# Comparison of screenings", "", meta_line(rep), "", "## Questions", "",
+         md_table(QUESTION_HEAD, question_rows(rep)), "", "## Sources", "",
          md_table(["name", "kind", "items", "statuses", "models", "configs"],
                   [[s["name"], s["kind"], s["items"], status_str(s), ", ".join(s["models"]) or "-",
                     len(s["fingerprints"]) or "-"] for s in rep["sources"]])]
@@ -319,7 +340,8 @@ def h_table(header, rows):
 
 def html_page(rep):
     e = html.escape
-    o = [f"<h1>Comparison of screenings</h1>", f'<p class="meta">{e(meta_line(rep))}</p>', "<h2>Sources</h2>",
+    o = [f"<h1>Comparison of screenings</h1>", f'<p class="meta">{e(meta_line(rep))}</p>', "<h2>Questions</h2>",
+         h_table(QUESTION_HEAD, question_rows(rep)), "<h2>Sources</h2>",
          h_table(["name", "kind", "items", "statuses", "models", "configs"],
                  [[s["name"], s["kind"], s["items"], status_str(s), ", ".join(s["models"]) or "-",
                    len(s["fingerprints"]) or "-"] for s in rep["sources"]])]
@@ -401,7 +423,13 @@ def tex_table(caption, label, colspec, header, rows, note=""):
 
 def latex(rep):
     """-> {file name: text}: table fragments to \\input, and report.tex that inputs them all."""
-    files = {}
+    files = {"questions.tex": tex_table(
+        "Questions answered for each paper, and the labels allowed.", "tab:questions",
+        r"ll>{\raggedright\arraybackslash}p{5.2cm}>{\raggedright\arraybackslash}p{5.2cm}",
+        ["Question", "Answer", "Asked", "Labels"],
+        [[rf"\texttt{{{tex(r[0])}}}", tex(r[1]), tex(r[2]), mboxes(q["labels"]) +
+          (rf" (pass: {mboxes(q['pass'])})" if q.get("pass") else "")]
+         for r, q in zip(question_rows(rep), rep["questions"])])}
     for q in label_qs(rep):
         qs = slug(q["id"])
         rows = [[tex(p["a"]) + " vs " + tex(p["b"]), p["n"], t2(p["agreement"]), tci(p["agreement_ci"]),
@@ -445,12 +473,17 @@ def latex(rep):
             f"with seed {m['seed']}.\\\\\nConfig: {url(m['config'])}" +
             (f"\\\\\nCommand: {url(m['command'])}" if m["command"] else ""))
     files["report.tex"] = (
-        "% Preview of the tables. In a paper, \\input the fragments; they need booktabs and xcolor[table].\n"
-        "\\documentclass{article}\n\\usepackage[margin=2cm]{geometry}\n\\usepackage{booktabs}\n"
+        "% Preview of the tables. In a paper, \\input the fragments; they need booktabs, array and xcolor[table].\n"
+        "\\documentclass{article}\n\\usepackage[margin=2cm]{geometry}\n\\usepackage{booktabs}\n\\usepackage{array}\n"
         "\\usepackage[table]{xcolor}\n\\usepackage{float}\n\\usepackage[obeyspaces,spaces]{url}\n"
         "\\floatplacement{table}{H}\n\\begin{document}\n"
         f"\\section*{{Comparison of screenings}}\n{{\\small\\raggedright {meta}\\par}}\n\n{body}\n\\end{{document}}\n")
     return files
+
+
+def mboxes(labels):
+    """Labels kept whole on a line (no break at their hyphens)."""
+    return ", ".join(rf"\mbox{{{tex(x)}}}" for x in labels)
 
 
 def tex_confusion(q, p):

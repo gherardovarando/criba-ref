@@ -135,6 +135,9 @@ def test_build(tmp_path):
     assert rep["titles"]["10.5555/example.1"][1] == "https://doi.org/10.5555/example.1"
     txt = report.text(rep)
     assert "screening vs expert (pass = include, maybe)" in txt and "other_model missed 1" in txt
+    assert "questions:\n  decision (one label): Include it?\n    include, exclude, maybe; pass: include, maybe" in txt
+    assert "| topics | tags | Topics? | a, b | - |" in report.markdown(rep)
+    assert report.short_ask({"ask": "Which data? One sentence, \"not stated\" otherwise."}) == "Which data?"
 
 
 class Checker(HTMLParser):
@@ -164,7 +167,7 @@ def test_write_all_formats(tmp_path):
                               f"expert={tmp_path / 'expert.csv'}"], reference="expert", reps=20)
     files = report.write(rep, tmp_path / "out")
     names = {str(p.relative_to(tmp_path / "out")) for p in (tmp_path / "out").rglob("*") if p.is_file()}
-    assert {"report.html", "report.md", "csv/metrics.csv", "csv/confusion.csv", "csv/disagreements.csv",
+    assert {"report.html", "report.md", "latex/questions.tex", "csv/metrics.csv", "csv/confusion.csv", "csv/disagreements.csv",
             "latex/report.tex", "latex/agreement-decision.tex", "latex/screening-decision.tex",
             "latex/tags-topics.tex", "figures/confusion-decision-expert-vs-results.svg"} <= names
     assert len(files) == len(names)
