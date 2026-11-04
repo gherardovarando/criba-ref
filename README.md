@@ -190,7 +190,8 @@ criba-ref compare ... --reference expert -o compare/  # also write HTML, Markdow
 **The labelling page.** `criba-ref sheet -f expert.csv --html` also writes `expert.html`, one self-contained page to send to the expert. It needs no server, no install and no internet, and nothing leaves the browser.
 - The expert writes their name, reads the instructions (the research question, and each question with its notes and examples, as the model gets them, without any model answer), and labels the papers one at a time.
 - Answers are radio buttons for one label, check boxes plus "none" for tags, and text fields for free answers and a comment. A paper is done when every label and tag question has an answer.
-- Moving around: previous and next, "next not done", numbered buttons for every paper, and keys (`1`–`9` for the first question, `←` `→`, `n`, `?`).
+- Layout: on a wide screen the paper is on the left and the instructions (collapsible) and answers on the right, which stay in view while you read; on a phone, one column.
+- Moving around: previous, next and "next not done" in a bar always visible at the bottom, numbered buttons for every paper, and keys (`1`–`9` for the first question, `←` `→`, `n`, `?`).
 - The page keeps the answers in the browser as the expert goes, and counts the seconds spent on each paper.
 - **Download CSV** gives `expert-<name>.csv`: the sheet's columns filled in, plus `labeller`, `seconds` and `last_change`. That is the file to give to `compare`. **Load CSV** reads one back, to go on in another browser.
 - The page warns when there are answers not yet downloaded. If the browser keeps nothing between visits (e.g. a private window), it says so.

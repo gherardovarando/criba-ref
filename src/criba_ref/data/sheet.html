@@ -14,7 +14,17 @@
   --accent:#3987e5;--accent-ink:#ffffff;--done:#4fb07c;--warn-bg:#3a2e17;--warn-ink:#f3cf8b;--focus:#6da7ec}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
-.wrap{max-width:860px;margin:0 auto;padding:0 16px}
+.wrap{max-width:1500px;margin:0 auto;padding:0 16px}
+:root{--head:0px;--foot:56px}
+body{padding-bottom:var(--foot)}
+.cols{display:block}
+@media (min-width:960px){
+  .cols{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;align-items:start}
+  .cols .side{position:sticky;top:calc(var(--head) + 12px);max-height:calc(100vh - var(--head) - var(--foot) - 24px);
+    overflow-y:auto;overscroll-behavior:contain;padding-right:4px}
+  .cols .paper{margin-top:12px}
+  .abstract{font-size:1.02rem;line-height:1.6}
+}
 header{position:sticky;top:0;z-index:2;background:var(--bg);border-bottom:1px solid var(--line)}
 header .wrap{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding-top:10px;padding-bottom:10px}
 h1{font-size:1.05rem;margin:0;flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
@@ -34,6 +44,7 @@ label.name input{width:12em}
 .banner{background:var(--warn-bg);color:var(--warn-ink);padding:8px 12px;border-radius:6px;margin:12px 0;font-size:.9rem}
 .hidden{display:none !important}
 details.instr{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 14px;margin:12px 0}
+details.instr[open]{max-height:60vh;overflow-y:auto}
 details.instr summary{cursor:pointer;font-weight:600}
 .instr .ctx{white-space:pre-wrap;color:var(--ink2)}
 .instr h3{font-size:.95rem;margin:14px 0 4px}
@@ -51,8 +62,11 @@ legend{font-weight:600;padding:0 4px}
 .opts label.none{color:var(--ink2);font-style:italic}
 .key{font-size:.75rem;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px}
 fieldset.todo legend::after{content:" · to answer";color:var(--warn-ink);font-weight:400;font-size:.85rem}
-nav.steps{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
-nav.steps .spacer{flex:1}
+footer.steps{position:fixed;left:0;right:0;bottom:0;z-index:2;background:var(--bg);border-top:1px solid var(--line)}
+footer.steps .wrap{display:flex;gap:8px;align-items:center;height:var(--foot)}
+footer.steps .spacer{flex:1}
+footer.steps .where{color:var(--ink2);font-size:.9rem;white-space:nowrap}
+@media (max-width:420px){footer.steps button{padding:6px 8px}}
 .dots{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 32px}
 .dots button{width:30px;height:30px;padding:0;font-size:.75rem;border-radius:50%}
 .dots button.done{background:var(--done);color:#fff;border-color:var(--done)}
@@ -75,15 +89,13 @@ nav.steps .spacer{flex:1}
   <div class="banner hidden" id="banner-name">Write your name at the top first: it goes into the CSV with your answers.</div>
   <div class="banner hidden" id="banner-unsaved">You have answers that are not in a downloaded CSV yet. Download the CSV before you close this page.</div>
   <div class="banner hidden" id="banner-storage">This browser does not keep the answers between visits. Download the CSV before you close this page.</div>
-  <details class="instr" id="instructions"><summary>Instructions and criteria</summary><div id="instr-body"></div></details>
-  <article class="paper" id="paper" aria-live="polite"></article>
-  <form id="form" autocomplete="off"></form>
-  <nav class="steps">
-    <button type="button" id="btn-prev">← Previous</button>
-    <button type="button" id="btn-next">Next →</button>
-    <span class="spacer"></span>
-    <button type="button" id="btn-todo">Next not done</button>
-  </nav>
+  <div class="cols">
+    <article class="paper" id="paper" aria-live="polite"></article>
+    <div class="side" id="side">
+      <details class="instr" id="instructions"><summary>Instructions and criteria</summary><div id="instr-body"></div></details>
+      <form id="form" autocomplete="off"></form>
+    </div>
+  </div>
   <div class="dots" id="dots" aria-label="Papers"></div>
   <p class="help">Keys: <span class="key">1</span>–<span class="key">9</span> choose an answer of the first question,
     <span class="key">←</span> <span class="key">→</span> move, <span class="key">n</span> next not done,
@@ -91,6 +103,13 @@ nav.steps .spacer{flex:1}
     you download is what counts.</p>
   <input type="file" id="file" accept=".csv,text/csv" class="hidden">
 </main>
+<footer class="steps"><nav class="wrap" aria-label="Move between papers">
+  <button type="button" id="btn-prev">← Previous</button>
+  <button type="button" id="btn-next">Next →</button>
+  <span class="where" id="where"></span>
+  <span class="spacer"></span>
+  <button type="button" id="btn-todo">Next not done</button>
+</nav></footer>
 
 <script type="application/json" id="sheet-data">__SHEET_DATA__</script>
 
@@ -403,6 +422,7 @@ function BrowserStore(key) {
     $("banner-unsaved").classList.toggle("hidden", !state.unsaved);
     $("btn-prev").disabled = state.current === 0;
     $("btn-next").disabled = state.current === data.items.length - 1;
+    $("where").textContent = "Paper " + (state.current + 1) + " of " + data.items.length;
     var dots = $("dots");
     dots.textContent = "";
     data.items.forEach(function (it, i) {
@@ -416,12 +436,19 @@ function BrowserStore(key) {
 
   function render() { renderPaper(); renderForm(); renderStatus(); }
 
+  // The answers column sits below the sticky header: keep its offset equal to the header's height.
+  function fitHeader() {
+    document.documentElement.style.setProperty("--head", document.querySelector("header").offsetHeight + "px");
+  }
+  window.addEventListener("resize", fitHeader);
+
   function go(i) {
     if (i < 0 || i >= data.items.length) return;
     state.current = i;
     save();
     render();
     window.scrollTo(0, 0);
+    $("side").scrollTop = 0;
   }
 
   // Time on each paper: one second per second the page is visible with that paper open.
@@ -497,6 +524,7 @@ function BrowserStore(key) {
 
   renderInstructions();
   render();
+  fitHeader();
 })();
 </script>
 </body>
