@@ -61,6 +61,12 @@ legend{font-weight:600;padding:0 4px}
 .opts label{display:flex;gap:6px;align-items:center;cursor:pointer;padding:2px 0}
 .opts label.none{color:var(--ink2);font-style:italic}
 .key{font-size:.75rem;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+fieldset.closed{display:flex;align-items:center;gap:10px;padding:6px 14px;cursor:pointer}
+fieldset.closed legend{float:left;padding:0;margin:0;font-weight:600}
+fieldset.closed .given{flex:1;min-width:0;overflow-wrap:anywhere;color:var(--ink)}
+fieldset.closed .given::before{content:"✓ ";color:var(--done)}
+button.small{font-size:.8rem;padding:2px 8px}
+.opts + .fold{margin-top:8px}
 fieldset.todo legend::after{content:" · to answer";color:var(--warn-ink);font-weight:400;font-size:.85rem}
 footer.steps{position:fixed;left:0;right:0;bottom:0;z-index:2;background:var(--bg);border-top:1px solid var(--line)}
 footer.steps .wrap{display:flex;gap:8px;align-items:center;height:var(--foot)}
@@ -346,11 +352,38 @@ function BrowserStore(key) {
     box.appendChild(el("div", { "class": "abstract" }, it.abstract || "(no abstract)"));
   }
 
+  // Which answered questions are open (being changed) on this paper; the others are shown collapsed.
+  var openQ = {};
+  function answered(q, a) {
+    var v = a[q.id];
+    return q.type === "text" ? !!(v && v.trim()) : q.multiple ? Array.isArray(v) : !!v;
+  }
+  function shown(q, a) {
+    var v = a[q.id];
+    return Array.isArray(v) ? (v.length ? v.join(", ") : "none") : String(v);
+  }
+  // A change to question qid collapses every other answered question; keep qid open if asked.
+  function touched(qid, keepOpen) {
+    openQ = {};
+    if (keepOpen) openQ[qid] = true;
+  }
+
   function renderForm() {
     var it = data.items[state.current], a = answersOf(it), form = $("form"), locked = !state.labeller.trim();
     form.textContent = "";
     data.questions.forEach(function (q) {
       var fs = el("fieldset");
+      if (answered(q, a) && !openQ[q.id]) {
+        fs.className = "closed";
+        fs.title = "Click to change";
+        fs.appendChild(el("legend", {}, q.id));
+        fs.appendChild(el("span", { "class": "given" }, shown(q, a)));
+        var ch = el("button", { type: "button", "class": "small" }, "change");
+        fs.appendChild(ch);
+        fs.addEventListener("click", function () { openQ[q.id] = true; renderForm(); });
+        form.appendChild(fs);
+        return;
+      }
       if (q.type === "label" && !(q.multiple ? Array.isArray(a[q.id]) : a[q.id])) fs.className = "todo";
       fs.appendChild(el("legend", {}, q.id));
       fs.appendChild(el("p", { "class": "ask" }, q.ask));
@@ -359,14 +392,17 @@ function BrowserStore(key) {
         var t = el("input", { type: "text", "aria-label": q.id });
         t.value = a[q.id] || "";
         t.disabled = locked;
-        t.addEventListener("input", function () { if (t.value.trim()) a[q.id] = t.value; else delete a[q.id]; changed(it); });
+        t.addEventListener("input", function () {
+          if (t.value.trim()) a[q.id] = t.value; else delete a[q.id];
+          openQ[q.id] = true; changed(it);
+        });
         opts.appendChild(t);
       } else if (!q.multiple) {
         q.labels.forEach(function (l, k) {
           var lab = el("label"), r = el("input", { type: "radio", name: "q-" + q.id, value: l });
           r.checked = a[q.id] === l;
           r.disabled = locked;
-          r.addEventListener("change", function () { a[q.id] = l; changed(it); renderForm(); });
+          r.addEventListener("change", function () { a[q.id] = l; touched(q.id, false); changed(it); renderForm(); });
           lab.appendChild(r);
           lab.appendChild(document.createTextNode(l));
           if (q === firstLabel && k < 9) lab.appendChild(el("span", { "class": "key" }, String(k + 1)));
@@ -379,7 +415,7 @@ function BrowserStore(key) {
         nb.disabled = locked;
         nb.addEventListener("change", function () {
           if (nb.checked) a[q.id] = []; else delete a[q.id];
-          changed(it); renderForm();
+          touched(q.id, !nb.checked); changed(it); renderForm();
         });
         q.labels.forEach(function (l) {
           var lab = el("label"), c = el("input", { type: "checkbox", value: l });
@@ -391,7 +427,7 @@ function BrowserStore(key) {
             if (!c.checked) now = now.filter(function (x) { return x !== l; });
             now = q.labels.filter(function (x) { return now.indexOf(x) >= 0; });
             if (now.length) a[q.id] = now; else delete a[q.id];
-            changed(it); renderForm();
+            touched(q.id, true); changed(it); renderForm();
           });
           lab.appendChild(c);
           lab.appendChild(document.createTextNode(l));
@@ -402,6 +438,11 @@ function BrowserStore(key) {
         opts.appendChild(none);
       }
       fs.appendChild(opts);
+      if (answered(q, a) && !(q.type === "label" && !q.multiple)) {
+        var done = el("button", { type: "button", "class": "small fold" }, "done");
+        done.addEventListener("click", function () { delete openQ[q.id]; renderForm(); });
+        fs.appendChild(done);
+      }
       form.appendChild(fs);
     });
     var fc = el("fieldset");
@@ -445,6 +486,7 @@ function BrowserStore(key) {
   function go(i) {
     if (i < 0 || i >= data.items.length) return;
     state.current = i;
+    openQ = {};
     save();
     render();
     window.scrollTo(0, 0);
@@ -514,7 +556,7 @@ function BrowserStore(key) {
     else if (e.key === "?") { $("instructions").open = !$("instructions").open; }
     else if (/^[1-9]$/.test(e.key) && firstLabel && state.labeller.trim()) {
       var l = firstLabel.labels[Number(e.key) - 1];
-      if (l) { var it = data.items[state.current]; answersOf(it)[firstLabel.id] = l; changed(it); renderForm(); }
+      if (l) { var it = data.items[state.current]; answersOf(it)[firstLabel.id] = l; touched(firstLabel.id, false); changed(it); renderForm(); }
     }
   });
   window.addEventListener("beforeunload", function (e) {
