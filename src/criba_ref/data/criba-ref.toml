@@ -62,3 +62,10 @@ type = "text"
 [missing_abstract]
 skip_model = true            # no abstract: don't ask the model, write this answer instead
 answer = { decision = "maybe" }
+
+[abstracts]                  # `criba-ref abstracts`: look up missing abstracts
+cache = "abstracts.jsonl"    # every lookup, with its source and link
+sources = ["openalex", "crossref", "arxiv", "semanticscholar"]
+min_similarity = 0.95        # how close a title must be to accept a record found by title
+delay = 1.0                  # seconds between requests to the same site
+# mailto = ""                # contact address for Crossref's polite pool (sent only if set)

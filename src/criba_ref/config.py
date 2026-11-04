@@ -24,6 +24,9 @@ DEFAULTS = {
     },
     "prompt": {"context": "", "file": "", "abstract_chars": 6000},
     "missing_abstract": {"skip_model": True, "answer": {}},
+    # `criba-ref abstracts`: where to look up missing abstracts
+    "abstracts": {"cache": "abstracts.jsonl", "sources": ["openalex", "crossref", "arxiv", "semanticscholar"],
+                  "min_similarity": 0.95, "delay": 1.0, "timeout": 30, "mailto": ""},
     "question": [],
 }
 
@@ -69,7 +72,7 @@ def load(path=None, overrides=None):
     base = p.parent.resolve()
     cfg["_path"] = str(p.resolve())
     cfg["_base"] = str(base)
-    for section, key in (("input", "file"), ("output", "dir"), ("prompt", "file")):
+    for section, key in (("input", "file"), ("output", "dir"), ("prompt", "file"), ("abstracts", "cache")):
         if cfg[section][key]:
             cfg[section][key] = str((base / Path(cfg[section][key]).expanduser()).resolve())
     validate(cfg)
@@ -86,6 +89,12 @@ def validate(cfg):
         raise ConfigError(f"model.backend must be one of {', '.join(BACKENDS)}, not {m['backend']!r}")
     if not cfg["input"]["file"]:
         raise ConfigError("input.file is not set")
+    a = cfg["abstracts"]
+    known = ("openalex", "crossref", "semanticscholar", "arxiv")  # abstracts.SOURCES
+    if not isinstance(a["sources"], list) or not a["sources"] or any(x not in known for x in a["sources"]):
+        raise ConfigError(f"abstracts.sources must be a list of {', '.join(known)}")
+    if not 0 < float(a["min_similarity"]) <= 1:
+        raise ConfigError("abstracts.min_similarity must be in (0, 1]")
     qs = cfg["question"]
     if not qs:
         raise ConfigError("no [[question]] in the config: add at least one")

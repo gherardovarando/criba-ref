@@ -4,7 +4,7 @@ import sys
 from importlib import resources
 from pathlib import Path
 
-from . import __version__, backends, compare, config, export, prompt, readers, report, screen, sheet
+from . import __version__, abstracts, backends, compare, config, export, prompt, readers, report, screen, sheet
 
 
 def common():
@@ -52,6 +52,19 @@ def parser():
     s.add_argument("--questions", help="comma-separated question ids (default: all)")
     s.add_argument("--html", action="store_true",
                    help="also write a labelling page (same name, .html) that the expert opens in a browser")
+    a = sub.add_parser("abstracts", parents=[c], help="look up missing abstracts and write a filled-in list",
+                       description="Look up the references without an abstract in public sources (by DOI, else "
+                                   "by a close title match), keep every lookup in the cache (abstracts.cache), "
+                                   "and write the list with the abstracts found. Point input.file to that list.")
+    a.add_argument("-f", "--file", help="the filled-in list to write (a CSV; a CSV/TSV input keeps its columns)")
+    a.add_argument("--sources", help=f"comma-separated, in order (default: abstracts.sources; "
+                                     f"any of {', '.join(abstracts.SOURCES)})")
+    a.add_argument("--ids", metavar="FILE", help="only the references listed in FILE")
+    a.add_argument("-n", "--limit", type=int, help="look up at most N references in this run")
+    a.add_argument("--retry", action="store_true", help="also ask again for those not found before")
+    a.add_argument("--no-lookup", action="store_true", help="ask nothing, only write the list from the cache")
+    a.add_argument("--dry-run", action="store_true", help="list what would be looked up, ask nothing")
+    a.add_argument("--force", action="store_true", help="overwrite FILE if it exists")
     k = sub.add_parser("compare", help="compare screenings: result folders and CSV labels",
                        description="Compare two or more screenings question by question. A source is a results "
                                    "folder or a CSV with an id column and question columns (e.g. a filled-in "
@@ -108,6 +121,8 @@ def cmd_check(args):
     skipped = f", {len(problems)} records skipped" if problems else ""
     print(f"input: {cfg['input']['file']}: {len(items)} items, {no_abs} without abstract, "
           f"{no_doi} without DOI{skipped}")
+    if no_abs:
+        print(f"  ({no_abs} without abstract: `criba-ref abstracts` can look them up)")
     for msg in problems[:10]:
         print(f"  {msg}")
     qs = cfg["question"]
@@ -232,6 +247,35 @@ def cmd_sheet(args):
         print(f"wrote {page}: open it in a browser; its Download CSV gives a sheet that compare reads", file=sys.stderr)
 
 
+def cmd_abstracts(args):
+    cfg = load(args)
+    opts = dict(cfg["abstracts"])
+    if args.sources:
+        opts["sources"] = [x.strip() for x in args.sources.split(",") if x.strip()]
+        bad = set(opts["sources"]) - set(abstracts.SOURCES)
+        if bad:
+            sys.exit(f"error: unknown source(s) {', '.join(sorted(bad))}")
+    out = Path(args.file).resolve() if args.file else None
+    if out and out == Path(cfg["input"]["file"]).resolve():
+        sys.exit("error: --file is the input file: write the filled-in list to another file")
+    if out and out.exists() and not args.force and not args.dry_run:
+        sys.exit(f"error: {out} exists already (use --force to overwrite)")
+    items, _ = items_of(cfg)
+    missing = sum(1 for it in items if not it.abstract)
+    print(f"{len(items)} items, {missing} without abstract; cache {opts['cache']}", file=sys.stderr)
+    if not args.no_lookup:
+        ids = set(read_ids(args.ids)) if args.ids else None
+        asked, found = abstracts.run(items, opts["cache"], opts, ids=ids, limit=args.limit, retry=args.retry,
+                                     dry_run=args.dry_run)
+        if not args.dry_run:
+            print(f"looked up {asked}, found {found}", file=sys.stderr)
+    if out and not args.dry_run:
+        rows, filled = abstracts.fill(cfg["input"]["file"], cfg["input"]["format"], cfg["input"]["fields"],
+                                      opts["cache"], out)
+        print(f"wrote {out}: {rows} rows, {filled} abstracts filled in, {missing - filled} still missing. "
+              f"Set input.file to it to screen with these abstracts.", file=sys.stderr)
+
+
 def cmd_compare(args):
     cfg = config.load(args.config)
     qids = [q["id"] for q in pick_questions(cfg, args.questions)] if args.questions else None
@@ -248,7 +292,8 @@ def cmd_compare(args):
 
 
 COMMANDS = {"init": cmd_init, "check": cmd_check, "prompt": cmd_prompt, "run": cmd_run, "export": cmd_export,
-            "stats": cmd_stats, "sheet": cmd_sheet, "compare": cmd_compare}
+            "stats": cmd_stats, "sheet": cmd_sheet, "compare": cmd_compare,
+            "abstracts": cmd_abstracts}
 
 
 def main(argv=None):

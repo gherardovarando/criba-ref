@@ -59,6 +59,24 @@ criba-ref prompt --schema                       # the JSON schema of the answer
 criba-ref prompt copy                           # copy the built-in instructions to prompt.md to edit
 ```
 
+## Missing abstracts
+
+`criba-ref abstracts` looks up the references without an abstract in public sources and writes a copy of the list with the abstracts it found:
+
+```sh
+criba-ref abstracts --dry-run                   # which references would be looked up
+criba-ref abstracts -f references-filled.csv    # look them up, write the filled-in list
+# then set input.file = "references-filled.csv" and screen as usual
+criba-ref abstracts -f references-filled.csv --force --no-lookup   # rewrite the list from the cache only
+criba-ref abstracts --retry                     # ask again for those not found before
+```
+
+- **Sources**, tried in order until one has the abstract: OpenAlex, Crossref, arXiv, Semantic Scholar (`[abstracts] sources`, or `--sources openalex,arxiv`).
+- **Matching.** A reference with a DOI is looked up by its DOI, and the record is rejected when its title is very different (a wrong DOI). A reference without a DOI is looked up by title. A record is accepted only when the titles are the same or nearly the same (similarity ≥ `min_similarity`, 0.95, after lower-casing and dropping accents and punctuation) and its year is at most 3 years before or 1 after the reference's (a preprint is often older than the paper). The abstract of a matched preprint can be an earlier version of the published one.
+- **Cache.** Every lookup is kept in `abstracts.jsonl` (`[abstracts] cache`), one line per reference: found or not, the source, the link to the record, the matched title and year, the similarity, what each source said, and the date. A reference is not asked again once found or tried everywhere without errors. Network errors and rate limits are tried again on the next run. Keep the cache with the list (e.g. in git): it shows where every abstract came from.
+- **The filled-in list.** A CSV or TSV input keeps all its columns and rows, with the abstract filled in and two new columns, `abstract_source` and `abstract_url`. Other formats (BibTeX, RIS, JSON) become a CSV with the fields criba-ref reads. The ids stay the same, so results made before still match. The input file is never changed.
+- **Keys and rate limits.** None is needed. Without a key OpenAlex shares a small daily budget per IP address, and Semantic Scholar often answers "too many requests". Keys are read from the environment only, never from the config: `OPENALEX_API_KEY`, `S2_API_KEY`. Crossref asks for a contact address (`[abstracts] mailto`, empty by default) for its polite pool; it is sent only if you set it. Requests wait `delay` seconds per host (3 s for arXiv).
+
 `-c DIR` (or `-c FILE`) points to the project config when you are not in its folder. Command-line options override the config file.
 
 ## The config
@@ -215,6 +233,8 @@ Every report states the date, the criba-ref version, the command line and the co
 - With `ollama`, nothing leaves the machine unless `model.url` points elsewhere.
 - With `claude-cli`, the instructions and each reference's text go to Anthropic under your Claude account. That is fine for published titles and abstracts, not for confidential material such as manuscripts under review. The command runs in an empty temporary folder with no settings, no tools and no MCP servers, so none of your CLAUDE.md files, memory or connected services are involved.
 
+With `criba-ref abstracts`, the titles and DOIs of the references without an abstract are sent to the sources listed above.
+
 ## Tests
 
 ```sh
@@ -227,5 +247,4 @@ Every report states the date, the criba-ref version, the command line and the co
 - Several models per reference, with an agreement rule and a third model or a person for the disagreements.
 - Stratified samples for the expert sheet (more likely includes, with weights to keep recall unbiased).
 - Back-ends for OpenAI-compatible servers and the Anthropic API.
-- Fetching missing abstracts.
 - Running several references at once.
