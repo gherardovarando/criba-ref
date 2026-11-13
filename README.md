@@ -1,5 +1,7 @@
 # criba-ref
 
+[![DOI](https://zenodo.org/badge/1443034509.svg)](https://doi.org/10.5281/zenodo.24190598)
+
 A first screening of a list of references with a language model. You give it a list of titles and abstracts (CSV, BibTeX, RIS or JSON), your research question with its criteria, and a few questions with the answers allowed. It asks the model about each reference and writes one JSON file per reference with the answers, each with a short reason. Then it exports everything as one CSV, one row per reference.
 
 The model can be a local one, through [Ollama](https://ollama.com), or Claude, through the `claude` command of [Claude Code](https://claude.com/claude-code) and your own Claude login.
