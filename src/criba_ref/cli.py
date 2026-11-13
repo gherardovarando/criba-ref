@@ -4,7 +4,7 @@ import sys
 from importlib import resources
 from pathlib import Path
 
-from . import __version__, abstracts, backends, compare, config, export, prompt, readers, report, screen, sheet
+from . import __version__, abstracts, backends, batch, compare, config, export, prompt, readers, report, screen, sheet
 
 
 def common():
@@ -38,6 +38,15 @@ def parser():
     r.add_argument("--rerun", action="store_true",
                    help="also redo items screened with another prompt, questions or model")
     r.add_argument("--dry-run", action="store_true", help="list what would be screened, call no model")
+    b = sub.add_parser("batch", parents=[c], help="screen with the Anthropic Batch API (half price, within 24 h)",
+                       description="submit: send the items that `run` would screen as Message Batches. "
+                                   "status: show the batches. collect: write the results of the batches that "
+                                   "have ended. cancel: stop the batches still running. Needs model.backend = "
+                                   "\"anthropic\" and an API key in ANTHROPIC_API_KEY.")
+    b.add_argument("action", choices=("submit", "status", "collect", "cancel"))
+    b.add_argument("-n", "--limit", type=int, help="submit: send at most N items")
+    b.add_argument("--rerun", action="store_true", help="submit: also items screened with another config")
+    b.add_argument("--dry-run", action="store_true", help="submit: only count what would be sent")
     e = sub.add_parser("export", parents=[c], help="write the results as CSV, one row per item")
     e.add_argument("-f", "--file", default="-", help="CSV file to write (default: print)")
     sub.add_parser("stats", parents=[c], help="counts per status and per label")
@@ -135,7 +144,7 @@ def cmd_check(args):
     probe = readers.Item(id="check", title="A test reference about nothing in particular",
                          abstract="This is a made-up abstract used to check that the model answers.")
     try:
-        raw, used = backends.complete(m, prompt.system_prompt(cfg), prompt.item_text(probe, 1000),
+        raw, used, _ = backends.complete(m, prompt.system_prompt(cfg), prompt.item_text(probe, 1000),
                                       prompt.schema(qs))
     except backends.BackendError as e:
         sys.exit(f"model: {m['backend']} {m['name']}: FAILED: {e}")
@@ -186,6 +195,40 @@ def cmd_run(args):
           file=sys.stderr)
     if st.counts.get("error"):
         sys.exit(1)
+
+
+def cmd_batch(args):
+    cfg = load(args)
+    try:
+        if args.action == "status":
+            rows = batch.status(cfg)
+            if not rows:
+                print("no batches yet")
+            for r in rows:
+                state = (f"collected {r['collected']}" if r["collected"] else
+                         f"{r['status']}: " + ", ".join(f"{k} {v}" for k, v in r["counts"].items() if v))
+                print(f"{r['batch']}  {r['created']}  {r['model']}  {r['requests']} requests  {state}")
+            return
+        if args.action == "cancel":
+            print(f"{batch.cancel(cfg)} batches cancelled")
+            return
+        items, _ = items_of(cfg)
+        if args.action == "collect":
+            counts = batch.collect(cfg, items)
+            print("written: " + (", ".join(f"{k} {v}" for k, v in sorted(counts.items())) or "nothing"))
+            return
+        m = cfg["model"]
+        counts, ids = batch.submit(cfg, items, rerun=args.rerun, limit=args.limit, dry_run=args.dry_run)
+        print(f"{m['name']}" + (f", effort {m['effort']}" if m.get("effort") else "") + ": "
+              + ", ".join(f"{k.replace('_', ' ')} {v}" for k, v in counts.items()))
+        if ids:
+            print(f"sent {len(ids)} batch(es); check with `criba-ref batch status`, then `criba-ref batch collect`")
+    except (batch.BatchError, backends.BackendError) as e:
+        sys.exit(f"error: {e}")
+    except Exception as e:  # errors of the anthropic SDK (key, network, HTTP status)
+        if type(e).__module__.split(".")[0] == "anthropic":
+            sys.exit(f"error: Anthropic API: {e}")
+        raise
 
 
 def cmd_export(args):
@@ -293,7 +336,7 @@ def cmd_compare(args):
 
 COMMANDS = {"init": cmd_init, "check": cmd_check, "prompt": cmd_prompt, "run": cmd_run, "export": cmd_export,
             "stats": cmd_stats, "sheet": cmd_sheet, "compare": cmd_compare,
-            "abstracts": cmd_abstracts}
+            "abstracts": cmd_abstracts, "batch": cmd_batch}
 
 
 def main(argv=None):

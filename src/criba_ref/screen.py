@@ -72,25 +72,50 @@ def write_json(path, data):
 def screen_item(cfg, system, sch, fp, item):
     """-> the result dict for one item (it doesn't write it)."""
     m = cfg["model"]
-    res = {"id": item.id, "item": item.meta(), "answers": None, "status": "ok", "problems": [],
-           "model": {"backend": m["backend"], "name": m["name"]}, "fingerprint": fp,
-           "date": datetime.now().isoformat(timespec="seconds")}
+    res = new_result(cfg, item, fp)
     if not item.abstract and cfg["missing_abstract"]["skip_model"]:
         res["answers"], res["status"] = missing_answer(cfg), "no_abstract"
         res["model"] = None
         return res
     t0 = time.monotonic()
     try:
-        raw, used = backends.complete(m, system, prompt.item_text(item, cfg["prompt"]["abstract_chars"]), sch)
+        raw, used, usage = backends.complete(m, system, prompt.item_text(item, cfg["prompt"]["abstract_chars"]), sch)
     except backends.BackendError as e:
         res["status"], res["problems"] = "error", [str(e)]
         return res
-    res["model"]["used"] = used
     res["seconds"] = round(time.monotonic() - t0, 1)
+    return fill(res, cfg, raw, used, usage)
+
+
+def fill(res, cfg, raw, used, usage):
+    """Put a model's answer into a result: the model that answered, token use, the cleaned answers."""
+    res["model"]["used"] = used
+    if usage:
+        res["usage"] = usage
     res["answers"], res["problems"] = clean(raw, cfg["question"])
     if res["problems"]:
         res["status"] = "invalid_answer"
     return res
+
+
+def new_result(cfg, item, fp):
+    m = cfg["model"]
+    return {"id": item.id, "item": item.meta(), "answers": None, "status": "ok", "problems": [],
+            "model": {"backend": m["backend"], "name": m["name"]}, "fingerprint": fp,
+            "date": datetime.now().isoformat(timespec="seconds")}
+
+
+def state(path, item, fp, rerun, retry_errors=True):
+    """What to do with an item: "skip" (done with this fingerprint), "stale" (done with another one,
+    left as it is) or "do"."""
+    old = load_result(path)
+    if old and old.get("id") == item.id:
+        same = old.get("fingerprint") == fp
+        if same and not (retry_errors and old.get("status") == "error"):
+            return "skip"
+        if not same and not rerun:
+            return "stale"
+    return "do"
 
 
 @dataclass
@@ -116,15 +141,13 @@ def run(cfg, items, rerun=False, retry_errors=True, dry_run=False, limit=None, l
     st = Stats(total=len(items))
     for n, item in enumerate(items, 1):
         path = result_path(cfg, item)
-        old = load_result(path)
-        if old and old.get("id") == item.id:
-            same = old.get("fingerprint") == fp
-            if same and not (retry_errors and old.get("status") == "error"):
-                st.skipped += 1
-                continue
-            if not same and not rerun:
-                st.stale += 1
-                continue
+        what = state(path, item, fp, rerun, retry_errors)
+        if what == "skip":
+            st.skipped += 1
+            continue
+        if what == "stale":
+            st.stale += 1
+            continue
         if limit is not None and st.done >= limit:
             break
         if dry_run:

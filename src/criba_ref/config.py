@@ -7,20 +7,23 @@ import tomllib
 from pathlib import Path
 
 CONFIG_NAME = "criba-ref.toml"
-BACKENDS = ("ollama", "claude-cli", "fake")
+BACKENDS = ("ollama", "claude-cli", "anthropic", "fake")
 
 DEFAULTS = {
     "input": {"file": "", "format": "auto", "fields": {}},
     "output": {"dir": "results"},
     "model": {
-        "backend": "ollama",           # "ollama", "claude-cli" or "fake" (tests)
-        "name": "qwen3:4b-instruct",   # claude-cli: "haiku", "sonnet", "opus" or a full model name
+        "backend": "ollama",           # "ollama", "claude-cli", "anthropic" or "fake" (tests)
+        "name": "qwen3:4b-instruct",   # claude-cli: "haiku", "sonnet", "opus" or a full model name;
+                                       # anthropic: a full model id, e.g. "claude-opus-5-5"
         "url": "http://localhost:11434",
         "temperature": 0.0,            # ollama only; claude-cli uses its own
         "num_ctx": 8192,
         "think": None,
         "timeout": 300,
         "command": "claude",           # claude-cli: the program to run
+        "effort": "",                  # anthropic: "low", "medium", "high", ... ("" = the model's default)
+        "max_tokens": 16000,           # anthropic: cap on the answer, hidden reasoning included
     },
     "prompt": {"context": "", "file": "", "abstract_chars": 6000},
     "missing_abstract": {"skip_model": True, "answer": {}},
@@ -87,6 +90,8 @@ def validate(cfg):
     m = cfg["model"]
     if m["backend"] not in BACKENDS:
         raise ConfigError(f"model.backend must be one of {', '.join(BACKENDS)}, not {m['backend']!r}")
+    if m.get("effort") not in ("", None, "low", "medium", "high", "xhigh", "max"):
+        raise ConfigError(f"model.effort must be low, medium, high, xhigh, max or empty, not {m['effort']!r}")
     if not cfg["input"]["file"]:
         raise ConfigError("input.file is not set")
     a = cfg["abstracts"]
@@ -175,4 +180,6 @@ def fingerprint(cfg, system_prompt):
             "abstract_chars": cfg["prompt"]["abstract_chars"], "missing_abstract": cfg["missing_abstract"]}
     if m["backend"] == "ollama":
         data.update(temperature=m["temperature"], num_ctx=m["num_ctx"], think=m["think"])
+    if m["backend"] == "anthropic" and m.get("effort"):
+        data["effort"] = m["effort"]
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:16]

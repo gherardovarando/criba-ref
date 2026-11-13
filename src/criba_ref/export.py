@@ -60,4 +60,16 @@ def stats(cfg, results):
                 c[x if x is not None else "(none)"] += 1
         order = [x for x in q["labels"] if c[x]] + [x for x in c if x not in q["labels"]]
         lines.append(f"{q['id']}: " + ", ".join(f"{x} {c[x]}" for x in order))
+    used = [r["usage"] for r in results if r.get("usage")]
+    if used:
+        tot = Counter()
+        for u in used:
+            tot.update({k: v for k, v in u.items() if isinstance(v, (int, float))})
+        n = len(used)
+        parts = [f"{k.replace('_tokens', '').replace('_', ' ')} {tot[k]:,} (mean {tot[k] / n:,.0f})"
+                 for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "output_tokens")
+                 if tot[k]]
+        lines.append(f"tokens over {n} model answers: " + ", ".join(parts))
+        if tot["cost_usd"]:
+            lines.append(f"cost reported by the claude command: ${tot['cost_usd']:.2f}")
     return "\n".join(lines)

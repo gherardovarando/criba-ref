@@ -1,5 +1,5 @@
 """Model back-ends. Each one takes the instructions, the item text and a JSON schema, and returns
-(answer dict, name of the model that answered). The model never calls tools."""
+(answer dict, name of the model that answered, token use or {}). The model never calls tools."""
 import json
 import shutil
 import subprocess
@@ -40,7 +40,8 @@ def ollama(m, system, user, schema):
     if m.get("think") is not None:
         payload["think"] = m["think"]
     out = _post(m["url"].rstrip("/") + "/api/chat", payload, m["timeout"])
-    return _json(out.get("message", {}).get("content")), m["name"]
+    usage = {"input_tokens": out.get("prompt_eval_count"), "output_tokens": out.get("eval_count")}
+    return _json(out.get("message", {}).get("content")), m["name"], {k: v for k, v in usage.items() if v}
 
 
 def claude_cli(m, system, user, schema):
@@ -68,7 +69,59 @@ def claude_cli(m, system, user, schema):
     if out is None:
         out = _json(env.get("result"))
     used = list(env.get("modelUsage") or {}) or [m["name"]]
-    return out, used[0]
+    u = env.get("usage") or {}
+    usage = {k: u[k] for k in ("input_tokens", "output_tokens", "cache_read_input_tokens",
+                               "cache_creation_input_tokens") if u.get(k)}
+    if env.get("total_cost_usd") is not None:
+        usage["cost_usd"] = env["total_cost_usd"]
+    return out, used[0], usage
+
+
+def anthropic_params(m, system, user, schema):
+    """The Messages API request: the instructions as a cached system block, the item as the user message,
+    the answer constrained to the JSON schema (structured outputs). Thinking is left to the model."""
+    out_cfg = {"format": {"type": "json_schema", "schema": schema}}
+    if m.get("effort"):
+        out_cfg["effort"] = m["effort"]
+    return {"model": m["name"], "max_tokens": m["max_tokens"],
+            "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            "messages": [{"role": "user", "content": user}], "output_config": out_cfg}
+
+
+def anthropic_answer(msg):
+    """A Messages API response (or a batch result's message) -> (answer, model, token use)."""
+    u = msg.usage
+    usage = {k: getattr(u, k, None) for k in ("input_tokens", "output_tokens", "cache_read_input_tokens",
+                                               "cache_creation_input_tokens")}
+    usage = {k: v for k, v in usage.items() if v}
+    if msg.stop_reason == "refusal":
+        cat = getattr(getattr(msg, "stop_details", None), "category", None)
+        raise BackendError(f"the model declined to answer (refusal{', ' + cat if cat else ''})")
+    if msg.stop_reason == "max_tokens":
+        raise BackendError("the answer was cut at max_tokens (raise model.max_tokens)")
+    text = next((b.text for b in msg.content if b.type == "text"), None)
+    return _json(text), msg.model, usage
+
+
+def client():
+    """The Anthropic client. The key comes from ANTHROPIC_API_KEY (or another credential the SDK finds),
+    never from the config file."""
+    try:
+        import anthropic
+    except ImportError:
+        raise BackendError("the anthropic back-end needs the SDK: pip install 'criba-ref[anthropic]'") from None
+    return anthropic.Anthropic()
+
+
+def anthropic_api(m, system, user, schema):
+    import anthropic
+    try:
+        msg = client().with_options(timeout=m["timeout"]).messages.create(**anthropic_params(m, system, user, schema))
+    except anthropic.APIStatusError as e:
+        raise BackendError(f"Anthropic API: HTTP {e.status_code}: {str(e.message)[:300]}") from None
+    except anthropic.APIConnectionError as e:
+        raise BackendError(f"Anthropic API: can't connect: {e}") from None
+    return anthropic_answer(msg)
 
 
 def fake(m, system, user, schema):
@@ -79,11 +132,12 @@ def fake(m, system, user, schema):
         ans = prop["properties"][key]
         val = ans["enum"][0] if "enum" in ans else [ans["items"]["enum"][0]] if ans["type"] == "array" else "-"
         out[qid] = {"basis": "fake back-end", key: val}
-    return out, "fake"
+    return out, "fake", {}
 
 
-BACKENDS = {"ollama": ollama, "claude-cli": claude_cli, "fake": fake}
+BACKENDS = {"ollama": ollama, "claude-cli": claude_cli, "anthropic": anthropic_api, "fake": fake}
 
 
 def complete(m, system, user, schema):
+    """-> (answer, model that answered, token use)."""
     return BACKENDS[m["backend"]](m, system, user, schema)

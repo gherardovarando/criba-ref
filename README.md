@@ -4,7 +4,7 @@
 
 A first screening of a list of references with a language model. You give it a list of titles and abstracts (CSV, BibTeX, RIS or JSON), your research question with its criteria, and a few questions with the answers allowed. It asks the model about each reference and writes one JSON file per reference with the answers, each with a short reason. Then it exports everything as one CSV, one row per reference.
 
-The model can be a local one, through [Ollama](https://ollama.com), or Claude, through the `claude` command of [Claude Code](https://claude.com/claude-code) and your own Claude login.
+The model can be a local one, through [Ollama](https://ollama.com), or Claude: through the `claude` command of [Claude Code](https://claude.com/claude-code) and your own Claude login, or through the Anthropic API with an API key, one reference at a time or as a batch at half the price.
 
 It is meant for a first pass. The answers are a model's reading of the abstract: check them, at least the `include` and `maybe` ones, before they go into a study.
 
@@ -31,10 +31,11 @@ python3 -m venv .venv
 ln -s "$PWD/.venv/bin/criba-ref" ~/.local/bin/criba-ref   # optional: put it on your PATH
 ```
 
-Python 3.11 or later. No other Python packages are needed.
+Python 3.11 or later. No other Python packages are needed, except `anthropic` for the Anthropic API back-end.
 
 For a local model: install Ollama and pull a model, e.g. `ollama pull qwen3:4b-instruct` (2.5 GB; on a 4-core CPU without a GPU, about a minute per reference).
 For Claude: install Claude Code and log in once (`claude`).
+For the Anthropic API: `.venv/bin/pip install -e '.[anthropic]'` (the `anthropic` package) and put your key in the environment, `export ANTHROPIC_API_KEY=...`. The key is never read from the config file.
 
 ## Use
 
@@ -60,6 +61,27 @@ criba-ref check -i other-list.csv               # another input file
 criba-ref prompt --schema                       # the JSON schema of the answer
 criba-ref prompt copy                           # copy the built-in instructions to prompt.md to edit
 ```
+
+## Anthropic API and batches
+
+With `backend = "anthropic"` and a full model id (e.g. `name = "claude-opus-5-5"`), `run` asks the API one reference at a time. The answer is constrained to the JSON schema of the questions (structured outputs), and the instructions are sent as a cached block. `effort` (`low`, `medium`, `high`, `xhigh`, `max`; empty = the model's default) sets how much the model reasons before answering. It is part of the fingerprint, as the model is. `max_tokens` (default 16000) caps each answer, reasoning included.
+
+For many references, send them as [Message Batches](https://platform.claude.com/docs/en/build-with-claude/batch-processing): half the price, results within 24 hours (often within an hour).
+
+```sh
+criba-ref batch submit --dry-run   # how many references would be sent
+criba-ref batch submit -n 10       # try 10 first
+criba-ref batch status             # the batches and their counts
+criba-ref batch collect            # write the results of the batches that have ended
+criba-ref stats                    # counts, and the tokens used
+criba-ref batch submit             # the rest
+criba-ref batch cancel             # stop the batches still running
+```
+
+- `submit` sends what `run` would screen: references without a result for the current config, and those with an error. References already in a batch that is not collected are not sent again. References without an abstract are written at once, without the model.
+- Each batch is noted in `results/_batches/<batch id>.json`: the batch id, the fingerprint, the model and which request is which reference. Up to 10,000 references per batch.
+- `collect` writes ordinary result files, with `"batch": "<batch id>"`. Requests that failed or expired get `status: error` and go in the next `submit`.
+- Each result has `usage`, the tokens of that answer, and `stats` adds them up. Multiply by the [prices](https://platform.claude.com/docs/en/about-claude/pricing) (halved for batches) for the cost.
 
 ## Missing abstracts
 
@@ -95,9 +117,11 @@ file = "references.ris"      # .csv .tsv .bib .ris .json .jsonl
 dir = "results"
 
 [model]
-backend = "ollama"           # or "claude-cli"
-name = "qwen3:4b-instruct"   # claude-cli: "haiku", "sonnet", "opus"
+backend = "ollama"           # or "claude-cli", "anthropic"
+name = "qwen3:4b-instruct"   # claude-cli: "haiku", "sonnet", "opus"; anthropic: e.g. "claude-opus-5-5"
 timeout = 300
+# effort = "low"             # anthropic only
+# max_tokens = 16000         # anthropic only
 
 [prompt]
 context = """
@@ -153,12 +177,14 @@ answer = { decision = "maybe" }
   "model": {"backend": "claude-cli", "name": "haiku", "used": "<full model name reported by the back-end>"},
   "fingerprint": "ddfd2fd85ae6f306",
   "date": "2026-11-02T14:43:26",
-  "seconds": 9.9
+  "seconds": 9.9,
+  "usage": {"input_tokens": 2012, "output_tokens": 486}
 }
 ```
 
 - `status`: `ok`, `no_abstract`, `invalid_answer` (some answer was outside the labels or empty; see `problems`) or `error` (the model could not be reached or gave no JSON; tried again on the next run).
 - `fingerprint`: a hash of the instructions, the questions and the model settings. Two results with the same fingerprint were made in the same way.
+- `usage`: the tokens of that answer, when the back-end reports them. With `claude-cli`, also `cost_usd`, the cost the `claude` command reports.
 - The abstract is not copied into the result: it stays in the input file.
 
 `criba-ref export` writes the CSV with the columns `id, title, year, doi, url, status`, then `<question>` and `<question>_reason` for each question (tags joined with `; `), then `screened_by` (the model that answered), `date` and `problems`. So a question can't be called `id`, `title`, `year`, `doi`, `url`, `status`, `screened_by`, `date` or `problems`, nor end in `_reason`.
@@ -236,6 +262,7 @@ Every report states the date, the criba-ref version, the command line and the co
 
 - With `ollama`, nothing leaves the machine unless `model.url` points elsewhere.
 - With `claude-cli`, the instructions and each reference's text go to Anthropic under your Claude account. That is fine for published titles and abstracts, not for confidential material such as manuscripts under review. The command runs in an empty temporary folder with no settings, no tools and no MCP servers, so none of your CLAUDE.md files, memory or connected services are involved.
+- With `anthropic`, the same text goes to the Anthropic API under the organisation of your API key, with its data retention settings.
 
 With `criba-ref abstracts`, the titles and DOIs of the references without an abstract are sent to the sources listed above.
 
@@ -250,5 +277,5 @@ With `criba-ref abstracts`, the titles and DOIs of the references without an abs
 
 - Several models per reference, with an agreement rule and a third model or a person for the disagreements.
 - Stratified samples for the expert sheet (more likely includes, with weights to keep recall unbiased).
-- Back-ends for OpenAI-compatible servers and the Anthropic API.
+- A back-end for OpenAI-compatible servers.
 - Running several references at once.

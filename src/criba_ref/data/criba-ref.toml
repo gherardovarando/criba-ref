@@ -11,9 +11,13 @@ format = "auto"              # or csv, tsv, bib, ris, json, jsonl
 dir = "results"              # one JSON file per item
 
 [model]
-backend = "ollama"           # "ollama" (local) or "claude-cli" (the `claude` command, your Claude login)
-name = "qwen3:4b-instruct"   # for claude-cli: "haiku", "sonnet" or "opus"
+backend = "ollama"           # "ollama" (local), "claude-cli" (the `claude` command, your Claude login)
+                             # or "anthropic" (the API; key in ANTHROPIC_API_KEY; `criba-ref batch` for batches)
+name = "qwen3:4b-instruct"   # claude-cli: "haiku", "sonnet" or "opus"; anthropic: e.g. "claude-opus-5-5"
 timeout = 300                # seconds per item
+# anthropic only:
+# effort = "low"             # low, medium, high, xhigh, max (empty: the model's default)
+# max_tokens = 16000
 # ollama only:
 url = "http://localhost:11434"
 temperature = 0.0

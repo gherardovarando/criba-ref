@@ -13,6 +13,7 @@ dependencies = []
 
 [project.optional-dependencies]
 test = ["pytest"]
+anthropic = ["anthropic>=2"]
 
 [project.scripts]
 criba-ref = "criba_ref.cli:main"
