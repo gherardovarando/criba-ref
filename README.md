@@ -278,4 +278,6 @@ With `criba-ref abstracts`, the titles and DOIs of the references without an abs
 - Several models per reference, with an agreement rule and a third model or a person for the disagreements.
 - Stratified samples for the expert sheet (more likely includes, with weights to keep recall unbiased).
 - A back-end for OpenAI-compatible servers.
-- Running several references at once.
+- Running several references at once with `run` (it asks one at a time; `batch` sends them all at once, but only to the Anthropic API).
+- Several experts on one computer: the labelling page keeps its answers in the browser per sheet, not per person, so two people in the same browser overwrite each other. Use separate browsers or computers.
+- A consensus of several experts as the reference in `compare` (now it compares each expert with each model and with the others).
