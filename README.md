@@ -16,7 +16,7 @@ It is meant for a first pass. The answers are a model's reading of the abstract:
   - a short free answer (e.g. "what data does the study use?").
 
   Every answer comes with a reason based on the title and abstract. "Include or not" is just one question, so you can also use it only to tag a list, or to ask several decisions at once.
-- **One JSON file per reference**, in `output.dir`, with the answers, the status, the model that answered, the date and a fingerprint of the instructions.
+- **One JSON file per reference**, in `output.dir`, with the answers, the status, the model that answered, the tokens used, the date and a fingerprint of the instructions.
 - **Runs resume.** A reference that already has a result made with the same instructions and model is skipped, so you can stop a run (Ctrl-C) and start it again. A result with an error is tried again. If you change the prompt, the questions or the model, the old results are kept and reported as made "with another config": `run --rerun` redoes them. To compare two models, give each its own folder with `-o`.
 - **No abstract, no model call.** A reference without an abstract gets the answer in `[missing_abstract]` (by default `maybe` for the decision) and the status `no_abstract`.
 - **The model only answers.** It gets the instructions and the text of one reference, and must reply with JSON that fits a schema built from the questions. It has no tools. An answer outside the allowed labels becomes the question's `fallback` (or empty) and the status `invalid_answer`.
