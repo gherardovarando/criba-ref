@@ -35,7 +35,7 @@ Python 3.11 or later. No other Python packages are needed, except `anthropic` fo
 
 For a local model: install Ollama and pull a model, e.g. `ollama pull qwen3:4b-instruct` (2.5 GB; on a 4-core CPU without a GPU, about a minute per reference).
 For Claude: install Claude Code and log in once (`claude`).
-For the Anthropic API: `.venv/bin/pip install -e '.[anthropic]'` (the `anthropic` package) and put your key in the environment, `export ANTHROPIC_API_KEY=...`. The key is never read from the config file.
+For the Anthropic API: `.venv/bin/pip install -e '.[anthropic]'` (the `anthropic` package) and put your key in the environment, `export ANTHROPIC_API_KEY=...`. The key is never read from the config file. A key that is not scoped to a workspace also needs `export ANTHROPIC_WORKSPACE_ID=wrkspc_...`.
 
 ## Use
 

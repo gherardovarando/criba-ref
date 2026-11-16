@@ -1,6 +1,7 @@
 """Model back-ends. Each one takes the instructions, the item text and a JSON schema, and returns
 (answer dict, name of the model that answered, token use or {}). The model never calls tools."""
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -105,12 +106,13 @@ def anthropic_answer(msg):
 
 def client():
     """The Anthropic client. The key comes from ANTHROPIC_API_KEY (or another credential the SDK finds),
-    never from the config file."""
+    never from the config file. A key that is not scoped to a workspace needs ANTHROPIC_WORKSPACE_ID."""
     try:
         import anthropic
     except ImportError:
         raise BackendError("the anthropic back-end needs the SDK: pip install 'criba-ref[anthropic]'") from None
-    return anthropic.Anthropic()
+    ws = os.environ.get("ANTHROPIC_WORKSPACE_ID", "").strip()
+    return anthropic.Anthropic(default_headers={"anthropic-workspace-id": ws} if ws else None)
 
 
 def anthropic_api(m, system, user, schema):
