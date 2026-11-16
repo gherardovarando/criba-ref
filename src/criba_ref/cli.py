@@ -46,6 +46,7 @@ def parser():
     b.add_argument("action", choices=("submit", "status", "collect", "cancel"))
     b.add_argument("-n", "--limit", type=int, help="submit: send at most N items")
     b.add_argument("--rerun", action="store_true", help="submit: also items screened with another config")
+    b.add_argument("--ids", nargs="+", help="submit: only these item ids")
     b.add_argument("--dry-run", action="store_true", help="submit: only count what would be sent")
     e = sub.add_parser("export", parents=[c], help="write the results as CSV, one row per item")
     e.add_argument("-f", "--file", default="-", help="CSV file to write (default: print)")
@@ -217,6 +218,11 @@ def cmd_batch(args):
             counts = batch.collect(cfg, items)
             print("written: " + (", ".join(f"{k} {v}" for k, v in sorted(counts.items())) or "nothing"))
             return
+        if args.ids:
+            want = set(args.ids)
+            items = [it for it in items if it.id in want]
+            if want - {it.id for it in items}:
+                print(f"warning: no item with id {', '.join(sorted(want - {it.id for it in items}))}", file=sys.stderr)
         m = cfg["model"]
         counts, ids = batch.submit(cfg, items, rerun=args.rerun, limit=args.limit, dry_run=args.dry_run)
         print(f"{m['name']}" + (f", effort {m['effort']}" if m.get("effort") else "") + ": "

@@ -169,6 +169,8 @@ def test_cli_batch(project, monkeypatch, capsys):
     d = str(cfg["_path"].parent) if hasattr(cfg["_path"], "parent") else cfg["_path"]
     cli.main(["batch", "submit", "-c", str(d), "--dry-run"])
     assert "to send 3" in capsys.readouterr().out
+    cli.main(["batch", "submit", "-c", str(d), "--dry-run", "--ids", "d", "10.1/a"])
+    assert "to send 2" in capsys.readouterr().out
     cli.main(["batch", "submit", "-c", str(d), "-n", "2"])
     assert "sent 1 batch" in capsys.readouterr().out
     cli.main(["batch", "status", "-c", str(d)])
