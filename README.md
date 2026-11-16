@@ -35,7 +35,7 @@ Python 3.11 or later. No other Python packages are needed, except `anthropic` fo
 
 For a local model: install Ollama and pull a model, e.g. `ollama pull qwen3:4b-instruct` (2.5 GB; on a 4-core CPU without a GPU, about a minute per reference).
 For Claude: install Claude Code and log in once (`claude`).
-For the Anthropic API: `.venv/bin/pip install -e '.[anthropic]'` (the `anthropic` package) and put your key in the environment, `export ANTHROPIC_API_KEY=...`. The key is never read from the config file. A key that is not scoped to a workspace also needs `export ANTHROPIC_WORKSPACE_ID=wrkspc_...`.
+For the Anthropic API: `.venv/bin/pip install -e '.[anthropic]'` (the `anthropic` package) and an API key; see [Anthropic API and batches](#anthropic-api-and-batches).
 
 ## Use
 
@@ -64,13 +64,36 @@ criba-ref prompt copy                           # copy the built-in instructions
 
 ## Anthropic API and batches
 
+**The key.** Create one in the [Anthropic Console](https://platform.claude.com) (API keys → Create key), inside a workspace. The API is billed to the Console organisation (prepaid credits or billing), not to a Claude subscription. criba-ref reads the key only from the environment, never from the config file. A simple way to keep it: a file only you can read, filled without the key appearing on screen or in the shell history.
+
+```sh
+mkdir -p ~/.config/criba-ref
+read -rs K && printf 'export ANTHROPIC_API_KEY=%s\n' "$K" > ~/.config/criba-ref/env && unset K   # paste the key, Enter
+chmod 600 ~/.config/criba-ref/env
+. ~/.config/criba-ref/env    # in the shell where you run criba-ref
+```
+
+Each line of that file must start with `export `. A key that is not scoped to a workspace also needs the workspace id: add `export ANTHROPIC_WORKSPACE_ID=wrkspc_...` (Console → Settings → Workspaces). Don't paste the key into chats, scripts or the config file; if it ends up somewhere it shouldn't, delete it in the Console and make a new one.
+
+**The config.**
+
+```toml
+[model]
+backend = "anthropic"
+name = "claude-opus-5-5"     # a full model id
+# effort = "low"             # optional
+# max_tokens = 16000         # optional
+```
+
+Or keep your config as it is and choose on the command line: `--backend anthropic --model claude-opus-5-5 -o results-opus`.
+
 With `backend = "anthropic"` and a full model id (e.g. `name = "claude-opus-5-5"`), `run` asks the API one reference at a time. The answer is constrained to the JSON schema of the questions (structured outputs), and the instructions are sent as a cached block. `effort` (`low`, `medium`, `high`, `xhigh`, `max`; empty = the model's default) sets how much the model reasons before answering. It is part of the fingerprint, as the model is. `max_tokens` (default 16000) caps each answer, reasoning included.
 
 For many references, send them as [Message Batches](https://platform.claude.com/docs/en/build-with-claude/batch-processing): half the price, results within 24 hours (often within an hour).
 
 ```sh
 criba-ref batch submit --dry-run   # how many references would be sent
-criba-ref batch submit -n 10       # try 10 first
+criba-ref batch submit -n 10       # try 10 first (or --ids ID ID ... for chosen ones)
 criba-ref batch status             # the batches and their counts
 criba-ref batch collect            # write the results of the batches that have ended
 criba-ref stats                    # counts, and the tokens used
@@ -82,6 +105,8 @@ criba-ref batch cancel             # stop the batches still running
 - Each batch is noted in `results/_batches/<batch id>.json`: the batch id, the fingerprint, the model and which request is which reference. Up to 10,000 references per batch.
 - `collect` writes ordinary result files, with `"batch": "<batch id>"`. Requests that failed or expired get `status: error` and go in the next `submit`.
 - Each result has `usage`, the tokens of that answer, and `stats` adds them up. Multiply by the [prices](https://platform.claude.com/docs/en/about-claude/pricing) (halved for batches) for the cost.
+
+An example: 10 abstracts of a causal-inference test list (about 330 tokens each), with three questions and Claude Opus 5.5 at its default effort, used about 490 input tokens, 2,600 cached instruction tokens and 210 output tokens per abstract, about $0.004 per abstract as a batch (November 2026 prices) and 6½ minutes for the batch. Run a small batch on your own list first: the cost depends on the length of the abstracts, the instructions and the answers.
 
 ## Missing abstracts
 
