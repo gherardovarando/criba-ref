@@ -306,3 +306,17 @@ With `criba-ref abstracts`, the titles and DOIs of the references without an abs
 - Running several references at once with `run` (it asks one at a time; `batch` sends them all at once, but only to the Anthropic API).
 - Several experts on one computer: the labelling page keeps its answers in the browser per sheet, not per person, so two people in the same browser overwrite each other. Use separate browsers or computers.
 - A consensus of several experts as the reference in `compare` (now it compares each expert with each model and with the others).
+
+## How this was made
+
+This tool was written by an AI coding agent: **Claude Opus 5.5** (model ID `claude-opus-5-5`) by Anthropic, running in **Claude Code**, from 2 to 16 November 2026. The idea came from [amanuense](https://github.com/gherardovarando/amanuense), the owner's tool that sorts email with a local model: criba-ref does the same kind of work on a list of references, one decision per item from its text. The design, features and constraints came from the repository owner's requests during the sessions, and they reviewed the results along the way:
+- configurable questions, with the include/exclude decision as just one of them
+- a local model through Ollama as an option, so references can stay on your computer
+- a blinded sheet and a labelling page for an expert, and a comparison of the model with the expert
+- the Anthropic API with batches, and the tokens used in every result
+
+The agent wrote the code and the tests. It tested the tool on made-up references and on a small test list of papers chosen by the owner, who labelled some of them as the expert.
+
+At the owner's request, the agent also searched GitHub for code like this tool's, to see if any of it came from other projects. It searched for about 20 distinctive lines from every module, from the labelling page and from the tests (336 searches), looked for notes like "adapted from", and checked the dependencies (none, apart from the optional `anthropic` package). It found no copied code. The lines found elsewhere are common one-line patterns (opening a URL, creating a folder, splitting a list into chunks, a dataclass field, a few CSS rules) and the textbook formulas for Cohen's kappa and the Jaccard index, with the rest of the code different. One of them, rounding half up with `Decimal`, is the same line as in another public project also written with Claude. This is most likely the same model writing the same short pattern, not copying. AI-written code can look like other AI-written code.
+
+This search has limits. GitHub's code search only finds text that is almost the same, and only on GitHub. It can't find code that was rewritten or that lives elsewhere, and it can't rule out that the model repeats something it saw in training. If you find code here that comes from your work, we are sorry. Please open an issue in this repository: we will credit you, add your licence, or rewrite or remove the code.
